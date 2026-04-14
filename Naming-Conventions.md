@@ -16,7 +16,15 @@ These conventions apply to all AUT libraries written in IEC 61131-3 Structured T
 
 - All variables declared between `VAR` / `END_VAR` are prefixed with a single underscore.
 - No Hungarian notation (no type prefix such as `fb`, `b`, `n`, `s`).
-- Examples: `_buffer`, `_state`, `_sendTimer`
+- First letter uppercase (PascalCase).
+- Examples: `_Buffer`, `_State`, `_SendTimer`
+
+## Input, Output, Input-Output Variables
+
+- All variables declared between `VAR_INPUT`, `VAR_OUTPUT`, `VAR_INOUT` / `END_VAR` have no prefix.
+- No Hungarian notation (no type prefix such as `fb`, `b`, `n`, `s`).
+- First letter uppercase (PascalCase).
+- Examples: `_Buffer`, `_State`, `_SendTimer`
 
 ## Structs
 
