@@ -65,6 +65,8 @@ Contiene:
 
 Note:
 > !?! L'*Access Modifier* a volte viene valorizzato a *Public* (default quando non indicato) e a volte non viene valorizzato anche se presente (ad esempio in *Property* e *Method*).
+> !?! Nel diagramma UML dell'elemento, sul lato sinistro del blocco, sono riportati anche i metodi con il loro tipo di ritorno
+> !?! Dovrebbero esserci: a sinistra le variabili di ingresso con i connettori a sinistra, a destra le variabili di uscita con i connettori a destra, al centro con connettori a sinistra e a destra le variabili di in/out; i metodi andrebbero sotto, in un apposito compartimento, con le firme e i simboli di visibilità
 
 ## Summary
 
@@ -78,7 +80,7 @@ Multiple lines:
 ```
 
 One line:
-```pascal
+```
 //! @Summary ...(content)...
 ```
 
@@ -88,10 +90,12 @@ Viene sempre renderizzato all'inizio della pagina del documento relativo all'ele
 Se non è presente alcun markup *Summary* la sezione non viene renderizzata.
 Può essere in qualunque punto del codice dell'elemento (declaration o body).
 
+Note:
+> !?! I ritorni a capo nel testo non vengono rispettati e non sembra possibile inserire un markup per forzare un ritorno a capo
+
 Regole AU-tomation:
 > inserire il markup all'inizio della POU, DUT e GVL, prima della sezione dichiarativa
 > usare la versione multiline per poter scrivere un testo sufficientemente lungo suddiviso su più righe che costituisca un sommario (senza dettagli implementativi)
-
 
 ## Description
 
@@ -105,7 +109,7 @@ Multiple lines:
 ```
 
 One line:
-```pascal
+```
 //! @Description ...(content)...
 ```
 
@@ -151,12 +155,13 @@ Il campo *Value* è valorizzato se nella dichiarazione della variabile è presen
 Il campo *Comment* è valorizzato se è presente:
 - un commento sulla stessa linea di dichiarazione della variabile (il commento deve avere il punto esclamativo subito dopo la doppia barra: //!, altrimenti non viene considerato)ù
 - un markup *Param* in qualunque punto della sezione di dichiarazione
+- per Methods e Properties il commendo deve essere inserito nella riga precedente la dichiarazione usando la sintassi //!
 
 Il markup *Param* deve contenere come parola iniziale il nome del parametro al quale si riferisce.
 
 Note:
 > !?! Tutte le occorrenze del nome del parametro all'interno del markup vengono rimosse.
-> !?! Le variabili che non hanno un commento in linea (//!) o il corrispondente markup, non vengono sono presenti nella lista. Il commento in linea del linguaggio ST (//) non viene considerato.
+> !?! Le variabili che non hanno un commento in linea (//!) o il corrispondente markup, non sono presenti nella lista. Il commento in linea del linguaggio ST (//) non viene considerato ai fini della documentazione.
 
 Nel seguente snippet di codice:
 ```
