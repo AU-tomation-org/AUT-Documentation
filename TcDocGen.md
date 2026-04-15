@@ -71,7 +71,7 @@ Note:
 ### Sintassi:
 
 Multiple lines:
-```pascal
+```
 (*! <Summary>
 ...(content)...
 </Summary>
@@ -89,27 +89,34 @@ Se non è presente alcun markup *Summary* la sezione non viene renderizzata.
 Può essere in qualunque punto del codice dell'elemento (declaration o body).
 
 Regole AU-tomation:
-> mettere il markup all'inizio della POU, DUT e GVL
-> usare la versione multiline per poter scrivere un teesto sufficientemente lungo suddiviso su più righe
+> inserire il markup all'inizio della POU, DUT e GVL, prima della sezione dichiarativa
+> usare la versione multiline per poter scrivere un testo sufficientemente lungo suddiviso su più righe che costituisca un sommario (senza dettagli implementativi)
 
 
 ## Description
 
 ### Sintassi
 
+Multiple lines:
+```
 (*! <Description>
 ...(content)...
 </Description>
+```
 
 One line:
+```pascal
 //! @Description ...(content)...
+```
 
 E' presente solo se nell'elemento di codice è presente il markup *Description*.  
 Può essere in qualunque punto del codice dell'elemento (declaration o body).  
 Se esistono più markup *Description* all'interno del codice dell'elemento, vengono tutti inseriti nella documentazione nell'ordine in cui sono scritti.
 
 Regole AU-tomation:
-> usare il markup all'interno del body
+> inserire il markup all'interno del body, preferibilmente prima del codice
+> descrivere che cosa fa l'elemento di codice
+> in casi particolari può essere ammesso inserire il markup in altri punti del codice (ricordando comunque che tutte le descrizioni vengono unite in un'unica sezione nell'ordine in cui si trovano nel codice
 
 ## Declaration
 
@@ -192,8 +199,8 @@ Per ciascun *Method* sono presenti le seguenti informazioni:
 
 Il campo *Type* contiene il tipo del valore di ritorno del metodo (se presente).
 
+Note:
 > !?! Non è chiaro come si possa valorizzare il campo *Comment*.
-
 > !?! La lista dei metodi dovrebbe non elencare i metodi privati (information hiding: dettagli implementativi)
 
 Per ciascuna *Property* sono presenti le seguenti informazioni:
@@ -211,7 +218,9 @@ Note:
 Regole AU-tomation:
 > per il campo *Comment* usare preferibilmente la versione inline con markup //! (i commenti con il markup //! @param sono di difficile utilizzo e richiedono molto spazio)
 
+## Example
 
+E' presente solo se è presente il corrispondente markup.  
 
 
 
