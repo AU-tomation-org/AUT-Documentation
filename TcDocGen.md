@@ -74,7 +74,7 @@ Multiple lines:
 ```
 (*! <Summary>
 ...(content)...
-</Summary>
+</Summary> *)
 ```
 
 One line:
@@ -101,7 +101,7 @@ Multiple lines:
 ```
 (*! <Description>
 ...(content)...
-</Description>
+</Description> *)
 ```
 
 One line:
