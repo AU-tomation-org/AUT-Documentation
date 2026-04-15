@@ -222,5 +222,11 @@ Regole AU-tomation:
 
 E' presente solo se è presente il corrispondente markup.  
 
+## Commenti al codice che non usano markup e che non sono inseriti nella documentazione
+
+Per tutti i commenti al codice che non usano markup e che non sono inseriti nella documeentazione:
+- privilegiare commenti su singola riga con '//' (stile C#)
+- Usare commenti multi-line (con (* ... *) solo per testi molto lunghi con formattazione
+
 
 
