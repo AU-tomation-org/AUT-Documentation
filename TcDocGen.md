@@ -9,12 +9,16 @@ La documentazione in formato TcDocGen viene generata per ciascun ...???
 ### Sintassi:
 
 Multiple lines:
+'''pascal
 (*! <Summary>
 ...(content)...
 </Summary>
+'''
 
 One line:
+'''pascal
 //! @Summary ...(content)...
+'''
 
 Il Summary compare una sola volta per POU, DUT e GVL.
 Se esistono più markup *Summary* all'interno del codice dell'elemento, viene inserito nella documentazione solo il testo del primo markup.
