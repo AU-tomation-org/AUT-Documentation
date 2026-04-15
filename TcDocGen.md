@@ -6,7 +6,7 @@
 
 ## Informazioni generali
 
-La funzione di engineering TE1030 'TwinCAT 3 Dcoumentation Generation' consente di generare la documentazione del codice utilizzando speciali markup.
+La funzione di engineering TE1030 'TwinCAT 3 Dcoumentation Generation' consente di generare la documentazione del codice utilizzando speciali markup.  
 Anche senza licenza, la TE1030 genera una anteprima in formato HTML che è possibile utilizzare per generare la documentazione utilizzando strumenti CI/CD.
 
 La TE1030 genera:
@@ -48,6 +48,7 @@ Il tipo dell'elemento può essere:
 - Global Variable List
 - DUT
 
+Note:
 > !?! I getter e i setter delle proprietà vengono marcati come tipo *Unknown*. Si potrebbe usare 'Getter' e 'Setter'. Occorre inoltre verificare se le pagine HTML per i getter e i setter vengono generati dal preview dell'intero progetto (vengono sicuramente generate facendo la preview del singolo getter o setter).
 
 ### Overview
@@ -62,6 +63,7 @@ Contiene:
   - Implements
   - Extends
 
+Note:
 > !?! L'*Access Modifier* a volte viene valorizzato a *Public* (default quando non indicato) e a volte non viene valorizzato anche se presente (ad esempio in *Property* e *Method*).
 
 ## Summary
@@ -106,12 +108,16 @@ E' presente solo se nell'elemento di codice è presente il markup *Description*.
 Può essere in qualunque punto del codice dell'elemento (declaration o body).  
 Se esistono più markup *Description* all'interno del codice dell'elemento, vengono tutti inseriti nella documentazione nell'ordine in cui sono scritti.
 
+Regole AU-tomation:
+> usare il markup all'interno del body
+
 ## Declaration
 
 E' sempre presente nelle POU (PRG, FB, FUN, DUT, GVL) e viene generata automaticamente.  
 Non è presente per metodi e proprietà.  
 Per le POU contiene l'intera sezione pubblica di dichiarazione (firma della POU, eventuali attributi e lista delle variabili dell'interfaccia pubblica: VAR_INPUT, VAR_OUTPUT, VAR_IN_OUT).
 
+Note:
 > !?! Anche i metodi e le proprietà (compresi getter e setter) dovrebbero riportare la loro sezione di dichiarazione.
 
 Dopo la sezione di dichiarazione, è presente una sezione 'Members' che può contenere le seguenti tabelle:
@@ -123,6 +129,7 @@ Dopo la sezione di dichiarazione, è presente una sezione 'Members' che può con
 - Methods
 - Properties
 
+Note:
 > !?! La lista delle variabili locali (interne) potrebbe essere nascosta nella documentazione (information hiding: dettagli implementativi).
 
 Le tabelle delle variabili contengono per ciascuna variabile le seguenti informazioni:
@@ -140,8 +147,8 @@ Il campo *Comment* è valorizzato se è presente:
 
 Il markup *Param* deve contenere come parola iniziale il nome del parametro al quale si riferisce.
 
+Note:
 > !?! Tutte le occorrenze del nome del parametro all'interno del markup vengono rimosse.
-
 > !?! Le variabili che non hanno un commento in linea (//!) o il corrispondente markup, non vengono sono presenti nella lista. Il commento in linea del linguaggio ST (//) non viene considerato.
 
 Nel seguente snippet di codice:
@@ -196,11 +203,13 @@ Per ciascuna *Property* sono presenti le seguenti informazioni:
 
 Il campo *Type* contiene il tipo del valore di ritorno della proprietà.
 
+Note:
 > !?! Non è chiaro come si possa valorizzare il campo *Comment*.
-
 > !?! Non viene indicato per ciascuna proprietà se siano presenti entrambi i getter e setter oppure solo uno di essi.
-
 > !?! La lista delle proprietà dovrebbe non elencare le proprietà private (information hiding: dettagli implementativi)
+
+Regole AU-tomation:
+> per il campo *Comment* usare preferibilmente la versione inline con markup //! (i commenti con il markup //! @param sono di difficile utilizzo e richiedono molto spazio)
 
 
 
