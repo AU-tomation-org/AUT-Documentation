@@ -152,7 +152,7 @@ Note:
 > !?! Le variabili che non hanno un commento in linea (//!) o il corrispondente markup, non vengono sono presenti nella lista. Il commento in linea del linguaggio ST (//) non viene considerato.
 
 Nel seguente snippet di codice:
-```pascal
+```
 VAR
 //! @param tTimerValue internal TIME variable that is being accessed via property "P_Timervalue" 
 //! @param TimerStart TimerStart is a time. Use TimerStart to specify the start time
