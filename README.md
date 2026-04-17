@@ -13,6 +13,6 @@
 | File | Description |
 |---|---|
 | [README.md](CI-CD-GitHub-TwinCAT-Self-Hosted-Runner/README.md) | Full setup, troubleshooting, and maintenance guide |
-| [ci-annotated.yml](CI-CD-GitHub-TwinCAT-Self-Hosted-Runner/ci-annotated.yml) | Workflow file with detailed inline comments |
+| [ci.yml](CI-CD-GitHub-TwinCAT-Self-Hosted-Runner/ci.yml) | Workflow file with detailed inline comments |
 | [scripts/setup-runner.ps1](CI-CD-GitHub-TwinCAT-Self-Hosted-Runner/scripts/setup-runner.ps1) | PowerShell script for initial runner environment setup |
 | [scripts/re-register-runner.ps1](CI-CD-GitHub-TwinCAT-Self-Hosted-Runner/scripts/re-register-runner.ps1) | PowerShell script for re-registration after credential expiry |
