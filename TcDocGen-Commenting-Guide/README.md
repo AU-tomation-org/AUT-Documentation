@@ -6,6 +6,22 @@ For setup, CI/CD integration, and known tool limitations see [TcDocGen.md](../Tc
 
 ---
 
+## Commenting Checklist
+
+| Element | Summary | Description | `//!` on variables | `//!` on return type | Example |
+|---|---|---|---|---|---|
+| FB / PRG | mandatory | mandatory | mandatory on **all** variables (public and private) | - | if useful |
+| FUN | mandatory | mandatory | mandatory on **all** variables (public and private) | **mandatory** | if useful |
+| METHOD | - | **mandatory** | mandatory on **all** variables (public and private) | **mandatory** | if useful |
+| PROPERTY | - | **mandatory on getter and setter** | mandatory on **all** variables | **mandatory** | if useful |
+| Interface | mandatory | mandatory | mandatory on all variables | mandatory on methods | if useful |
+| DUT | mandatory | - | mandatory on **all** fields | - | if useful |
+| GVL | mandatory | - | mandatory on **all** variables | - | if useful |
+
+> **Note on private variables:** TcDocGen lists private and local variables (`VAR`) in the Members table regardless of access modifier. Since information hiding is not enforced by the tool, add `//!` to all variables in all sections.
+
+---
+
 ## Delimiters
 
 Two comment delimiters activate markup processing:
@@ -101,21 +117,26 @@ VAR_INPUT
     Message  : STRING(255); //! Log message text
     Source   : STRING(64);  //! Identifier of the emitting component
 END_VAR
+VAR
+    _WriteIndex : UDINT;    //! Next write position in the ring buffer
+    _ReadIndex  : UDINT;    //! Next read position in the ring buffer
+    _Count      : UDINT;    //! Current number of entries in the buffer
+END_VAR
 ```
 
 **Rules:**
 
-- Use `//!` on the same line as the variable declaration.
+- Use `//!` on the same line as every variable declaration -- public **and** private.
 - Variables without a `//!` comment are **not listed** in the Members table. A plain `//` comment is ignored.
 - Keep the comment short -- it appears in a table column.
 - Do not use `@param` for variable documentation. Prefer `//!` inline.
-- For methods and properties, the `//!` comment goes on the **same line as the return type** in the declaration header (see [Methods](#methods)).
+- For functions, methods, and properties, the `//!` comment for the **return value** goes on the same line as the return type in the declaration header (see rules per element type below).
 
 ---
 
 ## Rules by Element Type
 
-### PRG, FB, FUN, Interface
+### PRG and FB
 
 **Summary** -- place at the very top of the declaration, before the element keyword:
 
@@ -130,13 +151,6 @@ VAR_INPUT
 END_VAR
 ```
 
-Or one-liner form:
-
-```
-//! @summary Accumulates log entries and forwards them to Loki at configurable intervals.
-FUNCTION_BLOCK LogClient
-```
-
 **Description** -- place in the body, before the implementation code:
 
 ```
@@ -149,7 +163,7 @@ and drive sending manually via Send().</note>
 </description> *)
 ```
 
-**Variables** -- comment every public variable (`VAR_INPUT`, `VAR_OUTPUT`, `VAR_IN_OUT`) with `//!`:
+**Variables** -- comment every variable in every section with `//!`:
 
 ```
 VAR_INPUT
@@ -162,11 +176,14 @@ VAR_OUTPUT
     Dropped      : UDINT;         //! Entries dropped due to buffer overflow
     Error        : BOOL;          //! TRUE if the last send attempt failed
 END_VAR
+VAR
+    _Buffer      : LogBuffer;     //! Internal ring buffer
+    _Timer       : TON;           //! Send interval timer
+    _Busy        : BOOL;          //! TRUE while an ADS write is in progress
+END_VAR
 ```
 
-Local variables (`VAR`) are listed in the documentation. If you do not want internal implementation variables to be visible, do not add `//!` to them.
-
-**Example** -- add an `<example>` block in the declaration when a usage snippet adds value:
+**Example** -- add when a usage snippet adds value:
 
 ```
 (*! <example>
@@ -183,58 +200,118 @@ _LogClient.LogInfo('Cycle started', 'MAIN');
 
 ---
 
+### FUN
+
+Functions follow the same rules as FB for Summary, Description, and variable comments. The return value **must** be commented with `//!` on the return type line:
+
+```
+(*! <summary>
+Encodes a log level value as its OTLP severity number string.
+</summary> *)
+FUNCTION LevelToSeverity : STRING   //! OTLP severity number string (e.g. '9' for Warning)
+VAR_INPUT
+    Level : LogLevel; //! Log severity level to encode
+END_VAR
+VAR
+    _Result : STRING; //! Intermediate result before assignment
+END_VAR
+```
+
+---
+
 ### Methods
 
-Methods do not have a Declaration section in the generated page. The return type comment and variable comments are the only structured documentation available.
+Methods do not have a Declaration section in the generated page. Description and return value comment are the primary documentation surfaces.
 
-**Return value comment** -- place `//!` on the same line as the return type:
-
-```
-METHOD Send : BOOL   //! Returns TRUE if the send succeeded, FALSE on ADS error
-VAR_INPUT
-    ...
-END_VAR
-```
-
-**Input/output variables** -- same `//!` inline rule as for FBs:
-
-```
-METHOD Push : BOOL   //! TRUE if the entry was accepted, FALSE if the buffer is full
-VAR_INPUT
-    LogEntry : LogEntry; //! Entry to add to the buffer
-END_VAR
-```
-
-**Description** -- add a `<description>` in the method body when the behaviour is not obvious from the name:
+**Description** -- mandatory, place in the method body:
 
 ```
 (*! <description>
 Pushes one entry into the ring buffer. If the buffer is full, the oldest
 entry is silently dropped and <c>Dropped</c> is incremented.
+Returns FALSE if the entry was dropped.
 </description> *)
 ```
 
-> **Note:** The Comment column in the Methods table on the parent FB page is populated by the `//!` comment on the return type line of the method declaration. Without it, the column is empty.
+**Return value** -- mandatory, `//!` on the return type line:
+
+```
+METHOD Push : BOOL   //! TRUE if accepted, FALSE if the buffer was full and the entry was dropped
+VAR_INPUT
+    LogEntry : LogEntry; //! Entry to add to the buffer
+END_VAR
+```
+
+**Variables** -- comment all variables with `//!`:
+
+```
+METHOD Push : BOOL   //! TRUE if accepted, FALSE if the entry was dropped
+VAR_INPUT
+    LogEntry : LogEntry; //! Entry to add to the buffer
+END_VAR
+VAR
+    _Idx : UDINT; //! Write index used for this push
+END_VAR
+```
+
+> **Note:** The Comment column in the Methods table on the parent FB page is populated by the `//!` on the return type line. Without it, the column is empty.
 
 ---
 
 ### Properties
 
-Properties follow the same rules as methods for the return type comment:
+**Return value** -- mandatory, `//!` on the return type line:
 
 ```
-PROPERTY BufferCount : UDINT   //! Number of entries currently queued
+PROPERTY BufferCount : UDINT   //! Number of entries currently queued in the buffer
 ```
 
-**Getter and Setter** are documented individually. In the generated HTML they are listed as type *Unknown* -- this is a known tool limitation. Add a `<description>` in the getter body to document read semantics, and in the setter body to document write semantics if they differ.
+**Description on getter** -- mandatory:
 
-> **Note:** Private properties are still listed in the Properties table. There is currently no way to hide them via markup.
+```
+(*! <description>
+Returns the number of entries currently held in the ring buffer.
+The value is updated every PLC cycle after the FB body executes.
+</description> *)
+```
+
+**Description on setter** -- mandatory even when symmetrical; describe write semantics explicitly:
+
+```
+(*! <description>
+Sets the maximum number of entries the buffer will hold before dropping.
+Changes take effect on the next Push call. Values above GVL.MaxMessages
+are silently clamped.
+</description> *)
+```
+
+**Variables** -- comment all variables in getter and setter `VAR` blocks with `//!`.
+
+> **Note:** Getter and Setter are shown as type *Unknown* in the Overview. This is a known tool limitation; the Description blocks are the only way to document them clearly.
+
+---
+
+### Interface
+
+Interfaces follow the same rules as FB. Each method declared in the interface follows the same rules as [Methods](#methods): Description mandatory, `//!` on return type mandatory.
+
+```
+(*! <summary>
+Contract for all telemetry client implementations.
+</summary> *)
+INTERFACE ITelemetryClient
+
+METHOD Send : BOOL   //! TRUE if the send completed without error
+VAR_INPUT
+    Payload : SomeType; //! Data to transmit
+END_VAR
+```
 
 ---
 
 ### DUT (Struct, Enum, Alias, Union)
 
-**Summary** -- place before the `TYPE` keyword:
+**Summary** -- mandatory, place before the `TYPE` keyword:
 
 ```
 (*! <summary>
@@ -243,7 +320,7 @@ A single log entry carrying severity, message text, and source identifier.
 TYPE LogEntry :
 STRUCT
     Level   : LogLevel;      //! Severity level
-    Message : STRING(255);   //! Log message text (truncated if longer)
+    Message : STRING(255);   //! Log message text (truncated if longer than 255 chars)
     Source  : STRING(64);    //! Identifier of the emitting component
 END_STRUCT
 END_TYPE
@@ -254,6 +331,9 @@ Comment every field with `//!`. Fields without a comment are not listed in the M
 For enums, comment each value:
 
 ```
+(*! <summary>
+Severity levels for log entries, ordered from least to most severe.
+</summary> *)
 TYPE LogLevel : (
     Verbose := 0, //! Verbose -- lowest severity, high-frequency diagnostic data
     Debug   := 1, //! Debug -- diagnostic information useful during development
@@ -269,7 +349,7 @@ END_TYPE
 
 ### GVL (Global Variable List)
 
-**Summary** -- place before `VAR_GLOBAL`:
+**Summary** -- mandatory, place before `VAR_GLOBAL`:
 
 ```
 (*! <summary>
@@ -451,10 +531,10 @@ For all code comments that are not intended for the generated documentation:
 | Issue | Behaviour | Workaround |
 |---|---|---|
 | `<summary>` used more than once | Only the first occurrence is rendered | Write the summary once at the top of the declaration |
-| Getter / Setter type in Overview | Shown as *Unknown* instead of Get/Set | Add a `<description>` in the getter/setter body to clarify |
+| Getter / Setter type in Overview | Shown as *Unknown* instead of Get/Set | Add a `<description>` in getter and setter body to clarify |
 | Access Modifier sometimes missing | Shown as empty even when `PUBLIC` is explicit | Known tool bug; no workaround |
 | `@param` removes variable name from text | All occurrences of the variable name are stripped | Use `//!` inline instead of `@param` |
-| Private methods and properties listed | Members table shows private members | No markup to suppress them; use naming convention to signal visibility |
+| Private methods and properties listed | Members table shows private members | No markup to suppress them; add `//!` to all private variables |
 | Line breaks in text | `\n` and blank lines in markup text are ignored | Use `<h1>`-`<h6>` or structural markup to separate content |
 | Methods/Properties Comment column | Populated by `//!` on the return type line only | Always add `//!` to the return type in method/property declarations |
 | DUT field comments for non-struct types | Alias and union members may not render comments | Verify with preview; add `<description>` as fallback |
