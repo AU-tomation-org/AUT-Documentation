@@ -86,7 +86,7 @@ C:\ProgramData\Beckhoff\TwinCAT\3.1\Runtimes\UmRT_Default\3.1\Boot\tcunit_xunit_
 
 `PRG_TEST` is the only program in the test PLC. It declares one instance per test suite and calls `RUN_IN_SEQUENCE()`:
 
-```pascal
+```
 {attribute 'no-analysis'}
 PROGRAM PRG_TEST
 VAR
@@ -111,14 +111,14 @@ Use `RUN_IN_SEQUENCE()` instead of `RUN()`. With `RUN_IN_SEQUENCE()`, TcUnit run
 
 Each test suite is a Function Block that extends `TcUnit.FB_TestSuite`. One suite per FB under test:
 
-```pascal
+```
 {attribute 'no-analysis'}
 FUNCTION_BLOCK LogBuffer_Test EXTENDS TcUnit.FB_TestSuite
 ```
 
 The body of the FB calls the test methods in the order you want them to appear in the report:
 
-```pascal
+```
 InitialState_IsEmptyAndCountZero();
 Push_CountIsOne_IsEmptyFalse();
 Pop_ReturnsEntryAndEmptiesBuffer();
@@ -156,7 +156,7 @@ Follow the same convention as the library under test:
 
 **Use `VAR` for simple value types** that are only needed within one cycle.
 
-```pascal
+```
 METHOD Push_CountIsOne_IsEmptyFalse
 VAR_INST
     _LogBuffer : LogBuffer;   // FB instance - survives across cycles
@@ -174,7 +174,7 @@ Each test method is completely independent. It creates its own fresh instances v
 
 If a test needs a specific initial condition (e.g. `SendInterval := T#2H` to prevent ADS sends), set it as a struct initialiser on the `VAR_INST` declaration:
 
-```pascal
+```
 VAR_INST
     _LogClient : LogClient := (SendInterval := T#2H);
 END_VAR
@@ -203,7 +203,7 @@ Always supply a descriptive `Message`. It appears in the test report next to the
 
 For tests that complete in one PLC scan (pure logic, no timers, no ADS).
 
-```pascal
+```
 METHOD <Action>_<Context>_<ExpectedResult>
 VAR_INST
     _<Type> : <Type>;
@@ -240,7 +240,7 @@ TEST_FINISHED();
 
 For tests that need multiple PLC scans to complete -- timers, state machines, external feedback.
 
-```pascal
+```
 METHOD <Action>_<Context>_<ExpectedResult>
 VAR_INST
     _<Type>  : <Type>;
@@ -283,7 +283,7 @@ END_IF
 
 **Example (from `TraceClient_Test`):**
 
-```pascal
+```
 METHOD TestMachine_WashCycle_Flushes4Spans
 VAR_INST
     _TraceClient : TraceClient := (SendInterval := T#2H);
@@ -314,7 +314,7 @@ END_IF
 
 For production use, always add a timeout so a stalled test does not block CI indefinitely.
 
-```pascal
+```
 METHOD <Action>_<Context>_<ExpectedResult>
 VAR_INST
     _<Type>   : <Type>;
@@ -362,13 +362,13 @@ Do not suppress warnings globally in the project settings. Apply them only where
 Write tests that verify observable behaviour (return values, output variables, buffer counts, state transitions), not internal implementation details. Tests tied to internal structure break whenever you refactor.
 
 **Good:**
-```pascal
+```
 // Verifies the public contract: after Push, Count = 1
 AssertEquals_UDINT(Expected := 1, Actual := _LogBuffer.Count, ...);
 ```
 
 **Avoid:**
-```pascal
+```
 // Verifies internal array index -- breaks on any internal refactor
 AssertEquals_UDINT(Expected := 0, Actual := _LogBuffer._writeIndex, ...);
 ```
