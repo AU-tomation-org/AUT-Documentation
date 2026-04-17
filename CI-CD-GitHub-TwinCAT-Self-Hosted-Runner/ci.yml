@@ -1,94 +1,96 @@
-# =============================================================================
-# TwinCAT Build & Test — GitHub Actions CI/CD Workflow
-# =============================================================================
+# ──────────────────────────────────────────────────────────────────────────────
+# CI/CD template for TwinCAT 3 projects with:
+#   - TcUnit test execution on UmRT target
+#   - TcDocGen documentation deployed to gh-pages
+#   - TwinCAT library release (.library + .compiled-library)
+#   - Optional C# Windows service release (.zip)
+#   - SARIF static analysis upload to GitHub Code Scanning
 #
-# This workflow automates build, test, documentation generation, static
-# analysis, and release publication for TwinCAT 3 PLC projects.
-#
-# REQUIREMENTS:
-#   - Self-hosted runner 'win-twincat-01' with TwinCAT XAE installed
-#   - TcCIBuilder.exe at C:\actions-runner\_tools\TcCIBuilder\
-#   - Runner configured as an interactive Windows Task Scheduler task
-#     (NOT as a Windows Service — TwinCAT COM requires an interactive session)
-#   - See: CI-CD-GitHub-TwinCAT-Self-Hosted-Runner/README.md
-#
-# PRODUCED ARTIFACTS:
-#   - build-logs          : Full TcCIBuilder console output
-#   - tcunit-results      : TcUnit XML test results (if tests ran)
-#   - static-analysis     : SARIF file from TwinCAT static analyzer
-#   - boot-project        : Compiled TwinCAT boot project image
-#
-# SIDE EFFECTS:
-#   - Pushes generated documentation to the gh-pages branch (GitHub Pages)
-#   - Creates GitHub Releases for any compiled library files found
-# =============================================================================
+# CUSTOMISE the env block below for each project.
+# Steps 2-3 and 11 are only needed when the solution includes a C# project.
+# ──────────────────────────────────────────────────────────────────────────────
 
-name: TwinCAT Build & Test
+name: Build, Test & Release
 
 on:
   push:
-    branches: [ master ]    # Trigger on every push to master
-  workflow_dispatch:         # Allow manual trigger from the GitHub Actions UI
+    branches: [ master ]
+  workflow_dispatch:
 
 jobs:
   build:
-    # -------------------------------------------------------------------------
-    # RUNNER SELECTION
-    # GitHub-hosted runners CANNOT be used for TwinCAT because:
-    #   1. TcCIBuilder uses TwinCAT's COM automation (requires local TwinCAT XAE)
-    #   2. TwinCAT licenses are machine-bound
-    #   3. UmRT must be running locally for test execution
-    # The runner is win-twincat-01 on DESKTOP-GQKMFOA (AU-tomation-org).
-    # -------------------------------------------------------------------------
     runs-on: [self-hosted, windows, twincat]
 
     env:
-      # Must match the .sln filename (without extension) and the root folder name
-      SOLUTION_NAME: TestTE1030TcDocGenMarkup
-      BUILD_CONFIG: Release
-      # Standard TwinCAT 3 build platform identifier
-      BUILD_PLATFORM: TwinCAT OS (x64)
+      SOLUTION_NAME:       <YourSolutionName>
+      BUILD_CONFIG:        Release
+      BUILD_PLATFORM:      TwinCAT OS (x64)
+      # Remove the next two lines if no C# project
+      CSPROJ_PATH:         <YourProject>\<YourProject>.csproj
+      SERVICE_PUBLISH_DIR: publish\<YourProject>
 
     permissions:
-      contents: write        # Required for git push to gh-pages branch
-      checks: write          # Required for TcUnit test report UI (GitHub Checks)
-      security-events: write # Required for SARIF upload to Code Scanning
-      actions: read          # Required for CodeQL upload-sarif telemetry
+      contents: write
+      checks: write
+      security-events: write
+      actions: read
+      pages: write
 
     steps:
 
-      # =======================================================================
-      # STEP 1 — Checkout repository
-      # =======================================================================
+      # ── 1 · Checkout ────────────────────────────────────────────────────────
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          # clean: false keeps the workspace between runs for faster incremental
-          # builds. Git handles the diff update. Set to true only if you suspect
-          # workspace corruption (stale files causing build errors).
           clean: false
 
-      # =======================================================================
-      # STEP 2 — Execute TcCIBuilder
-      # =======================================================================
-      # TcCIBuilder.exe drives TwinCAT XAE via COM automation to:
-      #   1. Open the .sln solution file in the TwinCAT XAE shell
-      #   2. Build the PLC project (generates .compiled-library if applicable)
-      #   3. Generate TcDocGen HTML documentation (if doc projects present)
-      #   4. Run TcUnit tests on the runtime (if test FB_* blocks present)
-      #   5. Export static analysis results as a SARIF JSON file
-      #   6. Set the AmsNetId for the target runtime in the project
-      #
-      # TcCIBuilder output files (written to github.workspace):
-      #   build.log                         -- full console output
-      #   TcUnit_Results.xml                -- JUnit-format test results
-      #   <SOLUTION_NAME>.sarif.json        -- static analysis findings
-      #   docs/<SOLUTION_NAME>/             -- generated HTML documentation
-      #
-      # NOTE: TcCIBuilder requires TwinCAT to be in an interactive user session.
-      # Running the runner as a Windows Service causes E_ACCESSDENIED (0x80070005)
-      # on the COM factory call. See README.md for the architecture decision.
-      # =======================================================================
+      # ── 2 · Build & publish C# Windows service ──────────────────────────────
+      # Remove steps 2, 3 and 11 if the solution has no C# project.
+      - name: Publish C# service
+        shell: powershell
+        run: |
+          dotnet publish "${{ env.CSPROJ_PATH }}" `
+            --configuration Release `
+            --output "${{ env.SERVICE_PUBLISH_DIR }}"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Zip C# service
+        shell: powershell
+        run: |
+          $zip = "${{ env.SOLUTION_NAME }}-service-win-x64.zip"
+          Compress-Archive -Path "${{ env.SERVICE_PUBLISH_DIR }}\*" -DestinationPath $zip -Force
+          Write-Host "Created: $zip"
+
+      # ── 3a · Ensure TwinCAT UmRT is running ─────────────────────────────────
+      # TcCIBuilder activates the PLC on the UmRT target. If UmRT is not already
+      # running, activation succeeds silently but the PLC never executes and
+      # TcUnit results never appear (TcCIBuilder times out).
+      - name: Ensure TwinCAT UmRT is running
+        shell: powershell
+        run: |
+          $startBat = 'C:\ProgramData\Beckhoff\TwinCAT\3.1\Runtimes\UmRT_Default\Start.bat'
+
+          $proc = Get-Process TcSystemServiceUm -ErrorAction SilentlyContinue
+          if ($proc) {
+            Write-Host "UmRT already running (PID $($proc.Id))."
+          } else {
+            Write-Host "UmRT not running - starting..."
+            Start-Process cmd.exe -ArgumentList "/c ""$startBat""" -WorkingDirectory (Split-Path $startBat) -WindowStyle Hidden
+          }
+
+          $deadline = (Get-Date).AddSeconds(30)
+          do {
+            Start-Sleep -Seconds 2
+            $proc = Get-Process TcSystemServiceUm -ErrorAction SilentlyContinue
+          } while (-not $proc -and (Get-Date) -lt $deadline)
+
+          if (-not $proc) {
+            Write-Error "UmRT did not start within 30 s."
+            exit 1
+          }
+          Write-Host "UmRT is running (PID $($proc.Id))."
+
+      # ── 3 · Execute TcCIBuilder (library build + docs + tests + SARIF) ──────
       - name: Execute TcCIBuilder
         shell: powershell
         run: |
@@ -100,121 +102,60 @@ jobs:
             exit $LASTEXITCODE
           }
 
-      # =======================================================================
-      # STEP 3 — Upload build log
-      # =======================================================================
-      # Uploaded unconditionally (if: always()) so the log is available even
-      # when the build fails. Essential for diagnosing TcCIBuilder errors.
-      # =======================================================================
-      - name: Upload Build Log
+      # ── 4 · Upload build log ─────────────────────────────────────────────────
+      - name: Upload build log
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: build-logs
           path: build.log
 
-      # =======================================================================
-      # STEP 4 — Upload TcUnit test results
-      # =======================================================================
-      # TcUnit_Results.xml is produced only when test function blocks (FB_*)
-      # exist in the solution AND the project has been executed on the runtime.
-      # If the file is missing, this step issues a warning but does not fail.
-      # =======================================================================
-      - name: Upload Test Results XML
+      # ── 5 · Upload TcUnit results ────────────────────────────────────────────
+      - name: Upload TcUnit results
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: tcunit-results
           path: ${{ github.workspace }}\TcUnit_Results.xml
 
-      # =======================================================================
-      # STEP 5 — Publish TcUnit test report to GitHub UI
-      # =======================================================================
-      # Parses TcUnit_Results.xml (JUnit format) and creates a visual test
-      # report visible under the GitHub Actions run → "Checks" tab.
-      # If no tests ran, it posts an empty report (not a failure).
-      # =======================================================================
-      - name: Publish Test Report UI
+      # ── 6 · Publish TcUnit test report to GitHub UI ──────────────────────────
+      - name: Publish TcUnit test report
         if: always()
         uses: mikepenz/action-junit-report@v4
         with:
           report_paths: '**/TcUnit_Results.xml'
-          check_name: 'TcUnit Execution Report'
+          check_name: TcUnit Execution Report
           include_passed: true
-          annotate_only: false
           detailed_summary: true
 
-      # =======================================================================
-      # STEP 6 — Upload static analysis SARIF
-      # =======================================================================
-      # Uploads the .sarif.json as a plain artifact for manual download.
-      # The SARIF file contains static analysis findings from TwinCAT's
-      # built-in analyzer. Requires TE1200 full license for metrics export.
-      # =======================================================================
-      - name: Upload Static Analysis Results
+      # ── 7 · Upload SARIF artifact ────────────────────────────────────────────
+      - name: Upload static analysis artifact
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: static-analysis
           path: ${{ github.workspace }}\*.sarif.json
 
-      # =======================================================================
-      # STEP 7 — Upload SARIF to GitHub Code Scanning
-      # =======================================================================
-      # Sends static analysis findings to GitHub's Code Scanning dashboard,
-      # visible under the repository Security tab.
-      #
-      # PREREQUISITE: GitHub Code Security must be enabled on the repository:
-      #   Repository → Settings → Code security → Enable Code scanning
-      #
-      # continue-on-error: true makes this step non-blocking. If Code Security
-      # is not enabled, the workflow proceeds and completes successfully.
-      # =======================================================================
-      - name: Upload SARIF to GitHub Code Scanning
+      # ── 8 · Upload SARIF to GitHub Code Scanning ─────────────────────────────
+      # Requires Code Scanning enabled in repo Settings > Code security.
+      # The SARIF file is named after the library project, not the solution.
+      - name: Upload SARIF to Code Scanning
         if: always()
         continue-on-error: true
         uses: github/codeql-action/upload-sarif@v4
         with:
-          sarif_file: ${{ github.workspace }}\${{ env.SOLUTION_NAME }}.sarif.json
+          sarif_file: ${{ github.workspace }}\<LibraryProjectName>.sarif.json
           category: twincat-static-analysis
 
-      # =======================================================================
-      # STEP 8 — Upload boot project
-      # =======================================================================
-      # Archives the compiled TwinCAT boot project (the binary image that the
-      # TwinCAT runtime loads). Location is the UmRT_Default runtime folder.
-      # Only uploaded on build success (if: success()).
-      # =======================================================================
-      - name: Upload Boot Project
-        if: success()
-        uses: actions/upload-artifact@v4
-        with:
-          name: boot-project
-          path: C:\ProgramData\Beckhoff\TwinCAT\3.1\Runtimes\UmRT_Default\3.1\Boot\**
-
-      # =======================================================================
-      # STEP 9 — Deploy documentation to gh-pages
-      # =======================================================================
-      # Publishes the TcDocGen-generated HTML documentation to the gh-pages
-      # branch, which is served by GitHub Pages at:
-      #   https://au-tomation-org.github.io/<repo-name>/
-      #
-      # Logic:
-      #   1. Clones the gh-pages branch (creates it as orphan if it doesn't exist)
-      #   2. Copies the docs/ folder into the clone
-      #   3. Commits and pushes only if there are actual changes (idempotent)
-      #
-      # The GITHUB_TOKEN has contents:write permission (set above).
-      # git user is set to github-actions[bot] for the commit authorship.
-      # =======================================================================
+      # ── 9 · Deploy TcDocGen documentation to gh-pages ───────────────────────
       - name: Deploy documentation to gh-pages
         if: success()
         shell: powershell
         run: |
           $docsSource = "${{ github.workspace }}\docs"
-          $tmpDir = "C:\actions-runner\_work\_gh_pages_tmp"
-          $sha = "${{ github.sha }}".Substring(0, 7)
-          $repoUrl = "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git"
+          $tmpDir     = "C:\actions-runner\_work\_gh_pages_tmp"
+          $sha        = "${{ github.sha }}".Substring(0, 7)
+          $repoUrl    = "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git"
 
           if (Test-Path $tmpDir) { Remove-Item $tmpDir -Recurse -Force }
           New-Item $tmpDir -ItemType Directory | Out-Null
@@ -236,73 +177,121 @@ jobs:
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git config core.autocrlf false
-
           git add -A
           $status = git status --porcelain
           if ($status) {
-            git commit -m "docs: update documentation from $sha"
+            git commit -m "docs: update from $sha"
             git push origin gh-pages
-            Write-Host "Documentation deployed to gh-pages."
+            Write-Host "Documentation deployed."
           } else {
-            Write-Host "No documentation changes to deploy."
+            Write-Host "No documentation changes."
           }
 
           Set-Location "${{ github.workspace }}"
           Remove-Item $tmpDir -Recurse -Force
 
-      # =======================================================================
-      # STEP 10 — Publish library releases
-      # =======================================================================
-      # Scans the repository for compiled TwinCAT library files
-      # (*.library, *.compiled-library), excluding _Libraries/ dependency folders.
-      #
-      # For each library found:
-      #   1. Reads the version from the corresponding .plcproj file
-      #      (ProjectVersion XML element)
-      #   2. Creates a GitHub Release tagged "<LibraryName>-v<Version>"
-      #      if it does not already exist
-      #   3. Uploads the library file to the release (--clobber overwrites)
-      #
-      # If no library files are found, the step is silently skipped.
-      # GH_TOKEN is required for the `gh` CLI release commands.
-      # =======================================================================
-      - name: Publish Library Releases
+      # ── 9b · Enable GitHub Pages and set homepage URL (idempotent) ──────────
+      # Requires pages: write permission.
+      # On org repos GITHUB_TOKEN may still return 403 due to org policy - non-blocking.
+      # One-time fallback via CLI:
+      #   gh api repos/<org>/<repo>/pages -X POST -f 'source[branch]=gh-pages' -f 'source[path]=/'
+      #   gh api repos/<org>/<repo> -X PATCH -f homepage='https://<org>.github.io/<repo>/'
+      - name: Enable GitHub Pages and set homepage URL
+        if: success()
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: powershell
+        run: |
+          $repo = "${{ github.repository }}"
+          $pagesUrl = "https://$($repo.Split('/')[0]).github.io/$($repo.Split('/')[1])/"
+          gh api repos/$repo/pages -X POST -f 'source[branch]=gh-pages' -f 'source[path]=/' 2>$null | Out-Null
+          gh api repos/$repo -X PATCH -f "homepage=$pagesUrl" --jq '.homepage'
+          Write-Host "Pages and homepage configured: $pagesUrl"
+
+      # ── 10 · Release TwinCAT library files (.library + .compiled-library) ───
+      # Tag format: <LibraryName>-v<ProjectVersion>  (e.g. AUT_LGTM-v1.0.0.0)
+      - name: Publish TwinCAT library releases
         if: success()
         shell: powershell
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          $libraries = Get-ChildItem -Path "${{ github.workspace }}" -Recurse -Include "*.library","*.compiled-library" | Where-Object { $_.DirectoryName -notlike "*_Libraries*" }
+          $libs = Get-ChildItem -Path "${{ github.workspace }}" -Recurse `
+                    -Include "*.library","*.compiled-library" |
+                  Where-Object { $_.DirectoryName -notlike "*_Libraries*" }
 
-          if (-not $libraries) {
-            Write-Host "No library files found - skipping release publishing."
+          if (-not $libs) {
+            Write-Host "No library files found - skipping."
             exit 0
           }
 
-          foreach ($lib in $libraries) {
-            $libName = $lib.BaseName
+          $groups = $libs | Group-Object { $_.BaseName }
 
-            $plcprojFile = Get-ChildItem -Path $lib.DirectoryName -Recurse -Filter "*.plcproj" | Select-Object -First 1
-            if (-not $plcprojFile) {
-              Write-Warning "No .plcproj found alongside $($lib.Name) - skipping."
+          foreach ($grp in $groups) {
+            $libName = $grp.Name
+
+            $plcproj = Get-ChildItem -Path "${{ github.workspace }}" -Recurse `
+                         -Filter "*.plcproj" |
+                       Where-Object { $_.DirectoryName -notlike "*_Libraries*" } |
+                       Select-Object -First 1
+
+            if (-not $plcproj) {
+              Write-Warning "No .plcproj found for $libName - skipping."
               continue
             }
 
-            [xml]$plcproj = Get-Content $plcprojFile.FullName
-            $version = $plcproj.SelectSingleNode("//*[local-name()='ProjectVersion']").InnerText
+            [xml]$xml = Get-Content $plcproj.FullName
+            $version  = $xml.SelectSingleNode("//*[local-name()='ProjectVersion']").InnerText
             if (-not $version) {
-              Write-Warning "ProjectVersion not found in $($plcprojFile.Name) - skipping."
+              Write-Warning "ProjectVersion not found in $($plcproj.Name) - skipping."
               continue
             }
 
             $tag = "$libName-v$version"
-            Write-Host "Publishing: $tag -> $($lib.Name)"
+            Write-Host "Release: $tag"
 
-            $releaseExists = & { $ErrorActionPreference = 'SilentlyContinue'; gh release view $tag --json tagName 2>$null }
-            if (-not $releaseExists) {
-              gh release create $tag --title "$libName v$version" --notes "Automated release from ${{ github.sha }}."
+            $exists = & { $ErrorActionPreference = 'SilentlyContinue'
+                          gh release view $tag --json tagName 2>$null }
+            if (-not $exists) {
+              gh release create $tag `
+                --title "$libName v$version" `
+                --notes "TwinCAT 3 library - automated release from ${{ github.sha }}."
             }
 
-            gh release upload $tag "$($lib.FullName)" --clobber
-            Write-Host "Done: $tag"
+            foreach ($f in $grp.Group) {
+              gh release upload $tag "$($f.FullName)" --clobber
+              Write-Host "  Uploaded: $($f.Name)"
+            }
           }
+
+      # ── 11 · Release C# Windows service ─────────────────────────────────────
+      # Remove this step if the solution has no C# project.
+      # Tag format: <SolutionName>-service-v<Version>
+      - name: Publish C# service release
+        if: success()
+        shell: powershell
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          [xml]$csproj = Get-Content "${{ env.CSPROJ_PATH }}"
+          $version = $csproj.SelectSingleNode("//*[local-name()='Version']").InnerText
+          if (-not $version) {
+            Write-Warning "Version not found in .csproj - skipping service release."
+            exit 0
+          }
+
+          $tag = "${{ env.SOLUTION_NAME }}-service-v$version"
+          $zip = "${{ github.workspace }}\${{ env.SOLUTION_NAME }}-service-win-x64.zip"
+          Write-Host "Release: $tag"
+
+          $exists = & { $ErrorActionPreference = 'SilentlyContinue'
+                        gh release view $tag --json tagName 2>$null }
+          if (-not $exists) {
+            gh release create $tag `
+              --title "${{ env.SOLUTION_NAME }} Windows Service v$version" `
+              --notes "Windows service - automated release from ${{ github.sha }}."
+          }
+
+          gh release upload $tag $zip --clobber
+          Write-Host "Uploaded: ${{ env.SOLUTION_NAME }}-service-win-x64.zip"
