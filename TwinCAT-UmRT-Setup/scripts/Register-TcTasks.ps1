@@ -29,12 +29,14 @@ Register-ScheduledTask `
 Write-Host "Registered: $taskFolder\TC3-UmRT-Autostart"
 
 # ── Task 2: License check every hour ────────────────────────────────────────
-$psExe   = 'C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe'
-$script  = 'C:\Users\alber\Scripts\Check-TcUmRtLicense.ps1'
+# Use wscript.exe //B as the launcher: its SW_HIDE style=0 prevents any
+# console window from flashing. powershell.exe -WindowStyle Hidden alone
+# still creates and immediately hides a window, causing a visible blue flash.
+$vbs = 'C:\Users\alber\Scripts\Run-Hidden.vbs'
 
 $action2 = New-ScheduledTaskAction `
-    -Execute  $psExe `
-    -Argument "-NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$script`""
+    -Execute  'wscript.exe' `
+    -Argument "//B //NoLogo `"$vbs`""
 
 # First run: at logon (so it checks immediately on each session start)
 $triggerLogon = New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME

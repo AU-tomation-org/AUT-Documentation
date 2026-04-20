@@ -49,6 +49,14 @@ powershell -ExecutionPolicy Bypass -File "C:\Users\alber\Scripts\Register-TcTask
 > needs elevated privileges on a specific machine, open Task Scheduler, edit the
 > task, and enable "Run with highest privileges".
 
+### `Run-Hidden.vbs`
+
+Thin VBScript wrapper used by the `TC3-UmRT-LicenseCheck` task.
+`wscript.exe //B` launches the process with `SW_HIDE` (style = 0), which
+prevents any console window from appearing. Using `powershell.exe -WindowStyle Hidden`
+directly in a scheduled task still flashes a blue window briefly on each run;
+this wrapper eliminates that flash entirely.
+
 ### `Check-TcUmRtLicense.ps1`
 
 Reads the UmRT `TrialLicense.tclrs` XML file, calculates days to expiry, and
@@ -70,7 +78,7 @@ To change the threshold, edit `$warnDays` at the top of the script.
 
 ## First-time setup on a new machine
 
-1. Copy both scripts to `C:\Users\<username>\Scripts\`
-2. Edit `Register-TcTasks.ps1`: update the `-User` and `$script` path if the username differs
+1. Copy all three scripts (`Register-TcTasks.ps1`, `Check-TcUmRtLicense.ps1`, `Run-Hidden.vbs`) to `C:\Users\<username>\Scripts\`
+2. Edit `Register-TcTasks.ps1` and `Run-Hidden.vbs`: update the username/paths if they differ
 3. Run `Register-TcTasks.ps1` once in an elevated PowerShell session
 4. Verify tasks appear in Task Scheduler under `\AU-tomation\`
