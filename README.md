@@ -7,6 +7,7 @@
 | [Naming Conventions](Naming-Conventions.md) | Naming rules for TwinCAT projects, variables, and files |
 | [TcDocGen](TcDocGen.md) | TcDocGen setup, output structure, and known tool limitations |
 | [TcDocGen Commenting Guide](TcDocGen-Commenting-Guide/README.md) | Complete guide to writing documentation comments in TwinCAT 3 ST: all markup syntax, rules by element type, and AU-tomation conventions |
+| [TcDocGen Viewer](tcdocgen-viewer/README.md) | Enhanced HTML viewer for Beckhoff TcDocGen output: interactive sidebar, breadcrumb navigation, and inject.js page enhancer |
 | [CI/CD GitHub Actions - TwinCAT Self-Hosted Runner](CI-CD-GitHub-TwinCAT-Self-Hosted-Runner/README.md) | Complete setup guide for the organization GitHub Actions runner (`win-twincat-01`), including architecture decisions, known issues, and maintenance |
 | [TwinCAT UmRT - Autostart and License Check](TwinCAT-UmRT-Setup/README.md) | Scheduled tasks to auto-start UmRT at logon and notify when the trial license is near expiry |
 | [TcUnit Testing](TcUnit-Testing/README.md) | How to set up and write unit tests for TwinCAT 3 libraries using TcUnit: project structure, conventions, and test templates |
@@ -17,6 +18,7 @@
 |---|---|
 | [TcDocGen.md](TcDocGen.md) | Setup, output structure, section descriptions, and known tool limitations |
 | [TcDocGen-Commenting-Guide/README.md](TcDocGen-Commenting-Guide/README.md) | Full markup reference and AU-tomation commenting rules |
+| [tcdocgen-viewer/README.md](tcdocgen-viewer/README.md) | Interactive viewer shell, inject.js enhancer, manifest generator |
 
 ### CI/CD GitHub Actions - TwinCAT Self-Hosted Runner
 
