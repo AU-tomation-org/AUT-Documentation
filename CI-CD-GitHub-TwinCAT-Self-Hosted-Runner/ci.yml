@@ -53,7 +53,7 @@ jobs:
       - name: Find solution file
         shell: powershell
         run: |
-          $sln = Get-ChildItem -Path "${{ github.workspace }}" -MaxDepth 1 -Filter "*.sln" | Select-Object -First 1
+          $sln = Get-ChildItem -Path "${{ github.workspace }}" -Filter "*.sln" | Select-Object -First 1
           if (-not $sln) { Write-Error "No .sln file found in repository root"; exit 1 }
           "SOLUTION_NAME=$($sln.BaseName)" | Out-File -Append -FilePath $env:GITHUB_ENV -Encoding utf8
           Write-Host "Found solution: $($sln.Name)"
@@ -121,7 +121,7 @@ jobs:
         if: always()
         shell: powershell
         run: |
-          $sarif = Get-ChildItem -Path "${{ github.workspace }}" -MaxDepth 1 -Filter "*.sarif.json" | Select-Object -First 1
+          $sarif = Get-ChildItem -Path "${{ github.workspace }}" -Filter "*.sarif.json" | Select-Object -First 1
           if ($sarif) {
             "SARIF_FILE=$($sarif.FullName)" | Out-File -Append -FilePath $env:GITHUB_ENV -Encoding utf8
             Write-Host "Found SARIF: $($sarif.Name)"
