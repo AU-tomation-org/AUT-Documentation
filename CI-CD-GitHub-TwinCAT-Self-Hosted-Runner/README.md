@@ -485,13 +485,7 @@ After the one-time manual setup, step 9b in `ci.yml` uses `continue-on-error: tr
 
 **Cause:** TcCIBuilder names the SARIF file after the **library PLC project**, not after the solution. If the solution is `AUT_Tc3LGTM` but the library project is `AUT_LGTM`, the generated file is `AUT_LGTM.sarif.json`.
 
-**Fix:** In `ci.yml`, set `sarif_file` to match the library project name:
-
-```yaml
-- uses: github/codeql-action/upload-sarif@v4
-  with:
-    sarif_file: ${{ github.workspace }}\<LibraryProjectName>.sarif.json
-```
+**Resolution:** The current `ci.yml` includes a `Find SARIF file` step (step 3b) that runs immediately after TcCIBuilder, scans the workspace root for `*.sarif.json`, and exports the result as `SARIF_FILE` to the job environment. The upload step then uses `${{ env.SARIF_FILE }}` instead of a hardcoded name. If no SARIF file is found (e.g. build failed before analysis), the upload step is automatically skipped.
 
 ---
 
@@ -500,6 +494,6 @@ After the one-time manual setup, step 9b in `ci.yml` uses `continue-on-error: tr
 | File | Description |
 |---|---|
 | `README.md` | This document |
-| `ci.yml` | Workflow template -- copy and customise `env` block for each project |
+| `ci.yml` | Workflow template — `SOLUTION_NAME` and SARIF file are auto-detected; customise only the C# env vars if applicable |
 | `scripts/setup-runner.ps1` | Automates Steps 5-6 of initial setup |
 | `scripts/re-register-runner.ps1` | Re-registers the runner after credential expiry |

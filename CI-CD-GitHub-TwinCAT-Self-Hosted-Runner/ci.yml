@@ -6,8 +6,12 @@
 #   - Optional C# Windows service release (.zip)
 #   - SARIF static analysis upload to GitHub Code Scanning
 #
+# SOLUTION_NAME is auto-detected from the .sln file in the repository root.
+# SARIF file name is auto-detected after TcCIBuilder runs.
+#
 # CUSTOMISE the env block below for each project.
-# Steps 2-3 and 11 are only needed when the solution includes a C# project.
+# Remove CSPROJ_PATH and SERVICE_PUBLISH_DIR if no C# project.
+# Steps 2, 3 and 11 are only needed when the solution includes a C# project.
 # ──────────────────────────────────────────────────────────────────────────────
 
 name: Build, Test & Release
@@ -22,7 +26,6 @@ jobs:
     runs-on: [self-hosted, windows, twincat]
 
     env:
-      SOLUTION_NAME:       <YourSolutionName>
       BUILD_CONFIG:        Release
       BUILD_PLATFORM:      TwinCAT OS (x64)
       # Remove the next two lines if no C# project
@@ -44,6 +47,17 @@ jobs:
         with:
           clean: false
 
+      # ── 1b · Auto-detect solution name ──────────────────────────────────────
+      # Reads the .sln file name from the repository root and exports SOLUTION_NAME
+      # to the job environment for all subsequent steps.
+      - name: Find solution file
+        shell: powershell
+        run: |
+          $sln = Get-ChildItem -Path "${{ github.workspace }}" -MaxDepth 1 -Filter "*.sln" | Select-Object -First 1
+          if (-not $sln) { Write-Error "No .sln file found in repository root"; exit 1 }
+          "SOLUTION_NAME=$($sln.BaseName)" | Out-File -Append -FilePath $env:GITHUB_ENV -Encoding utf8
+          Write-Host "Found solution: $($sln.Name)"
+
       # ── 2 · Build & publish C# Windows service ──────────────────────────────
       # Remove steps 2, 3 and 11 if the solution has no C# project.
       - name: Publish C# service
@@ -62,9 +76,6 @@ jobs:
           Write-Host "Created: $zip"
 
       # ── 3a · Ensure TwinCAT UmRT is running ─────────────────────────────────
-      # TcCIBuilder activates the PLC on the UmRT target. If UmRT is not already
-      # running, activation succeeds silently but the PLC never executes and
-      # TcUnit results never appear (TcCIBuilder times out).
       - name: Ensure TwinCAT UmRT is running
         shell: powershell
         run: |
@@ -100,6 +111,23 @@ jobs:
           if ($LASTEXITCODE -ne 0) {
             Write-Error "TcCIBuilder failed with exit code $LASTEXITCODE"
             exit $LASTEXITCODE
+          }
+
+      # ── 3b · Auto-detect SARIF file ─────────────────────────────────────────
+      # TcCIBuilder names the SARIF file after the library PLC project, which may
+      # differ from the solution name (see Issue 14 in CI/CD README). This step
+      # finds the generated file and exports SARIF_FILE for the upload step.
+      - name: Find SARIF file
+        if: always()
+        shell: powershell
+        run: |
+          $sarif = Get-ChildItem -Path "${{ github.workspace }}" -MaxDepth 1 -Filter "*.sarif.json" | Select-Object -First 1
+          if ($sarif) {
+            "SARIF_FILE=$($sarif.FullName)" | Out-File -Append -FilePath $env:GITHUB_ENV -Encoding utf8
+            Write-Host "Found SARIF: $($sarif.Name)"
+          } else {
+            "SARIF_FILE=" | Out-File -Append -FilePath $env:GITHUB_ENV -Encoding utf8
+            Write-Host "No SARIF file found - upload step will be skipped."
           }
 
       # ── 4 · Upload build log ─────────────────────────────────────────────────
@@ -138,13 +166,13 @@ jobs:
 
       # ── 8 · Upload SARIF to GitHub Code Scanning ─────────────────────────────
       # Requires Code Scanning enabled in repo Settings > Code security.
-      # The SARIF file is named after the library project, not the solution.
+      # Skipped automatically when no SARIF file was produced by TcCIBuilder.
       - name: Upload SARIF to Code Scanning
-        if: always()
+        if: always() && env.SARIF_FILE != ''
         continue-on-error: true
         uses: github/codeql-action/upload-sarif@v4
         with:
-          sarif_file: ${{ github.workspace }}\<LibraryProjectName>.sarif.json
+          sarif_file: ${{ env.SARIF_FILE }}
           category: twincat-static-analysis
 
       # ── 9 · Deploy TcDocGen documentation to gh-pages ───────────────────────
@@ -210,7 +238,6 @@ jobs:
           Write-Host "Pages and homepage configured: $pagesUrl"
 
       # ── 10 · Release TwinCAT library files (.library + .compiled-library) ───
-      # Tag format: <LibraryName>-v<ProjectVersion>  (e.g. AUT_LGTM-v1.0.0.0)
       - name: Publish TwinCAT library releases
         if: success()
         shell: powershell
@@ -267,7 +294,6 @@ jobs:
 
       # ── 11 · Release C# Windows service ─────────────────────────────────────
       # Remove this step if the solution has no C# project.
-      # Tag format: <SolutionName>-service-v<Version>
       - name: Publish C# service release
         if: success()
         shell: powershell
