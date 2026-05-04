@@ -8,10 +8,7 @@
 #
 # SOLUTION_NAME is auto-detected from the .sln file in the repository root.
 # SARIF file name is auto-detected after TcCIBuilder runs.
-#
-# CUSTOMISE the env block below for each project.
-# Remove CSPROJ_PATH and SERVICE_PUBLISH_DIR if no C# project.
-# Steps 2, 3 and 11 are only needed when the solution includes a C# project.
+# C# project is auto-detected from .csproj files; no manual configuration needed.
 # ──────────────────────────────────────────────────────────────────────────────
 
 name: Build, Test & Release
@@ -26,11 +23,8 @@ jobs:
     runs-on: [self-hosted, windows, twincat]
 
     env:
-      BUILD_CONFIG:        Release
-      BUILD_PLATFORM:      TwinCAT OS (x64)
-      # Remove the next two lines if no C# project
-      CSPROJ_PATH:         <YourProject>\<YourProject>.csproj
-      SERVICE_PUBLISH_DIR: publish\<YourProject>
+      BUILD_CONFIG:   Release
+      BUILD_PLATFORM: TwinCAT OS (x64)
 
     permissions:
       contents: write
@@ -47,7 +41,7 @@ jobs:
         with:
           clean: false
 
-      # ── 1b · Auto-detect solution name ──────────────────────────────────────
+      # ── 2 · Auto-detect solution name ───────────────────────────────────────
       # Reads the .sln file name from the repository root and exports SOLUTION_NAME
       # to the job environment for all subsequent steps.
       - name: Find solution file
@@ -58,9 +52,29 @@ jobs:
           "SOLUTION_NAME=$($sln.BaseName)" | Out-File -Append -FilePath $env:GITHUB_ENV -Encoding utf8
           Write-Host "Found solution: $($sln.Name)"
 
-      # ── 2 · Build & publish C# Windows service ──────────────────────────────
-      # Remove steps 2, 3 and 11 if the solution has no C# project.
+      # ── 3 · Detect C# project ───────────────────────────────────────────────
+      # Searches for a .csproj file and sets HAS_CSHARP, CSPROJ_PATH, and
+      # SERVICE_PUBLISH_DIR in the job environment. Steps 4, 5, and 17 run only
+      # when HAS_CSHARP is 'true'.
+      - name: Detect C# project
+        shell: powershell
+        run: |
+          $csproj = Get-ChildItem -Path "${{ github.workspace }}" -Recurse -Filter "*.csproj" | Select-Object -First 1
+          if ($csproj) {
+            $relPath    = $csproj.FullName.Substring("${{ github.workspace }}".Length).TrimStart('\', '/')
+            $publishDir = "publish\$($csproj.BaseName)"
+            "HAS_CSHARP=true"                 | Out-File -Append -FilePath $env:GITHUB_ENV -Encoding utf8
+            "CSPROJ_PATH=$relPath"            | Out-File -Append -FilePath $env:GITHUB_ENV -Encoding utf8
+            "SERVICE_PUBLISH_DIR=$publishDir" | Out-File -Append -FilePath $env:GITHUB_ENV -Encoding utf8
+            Write-Host "C# project detected: $relPath"
+          } else {
+            "HAS_CSHARP=false" | Out-File -Append -FilePath $env:GITHUB_ENV -Encoding utf8
+            Write-Host "No C# project found - steps 4, 5, and 17 will be skipped."
+          }
+
+      # ── 4 · Build & publish C# Windows service ──────────────────────────────
       - name: Publish C# service
+        if: env.HAS_CSHARP == 'true'
         shell: powershell
         run: |
           dotnet publish "${{ env.CSPROJ_PATH }}" `
@@ -68,14 +82,16 @@ jobs:
             --output "${{ env.SERVICE_PUBLISH_DIR }}"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
+      # ── 5 · Zip C# service ──────────────────────────────────────────────────
       - name: Zip C# service
+        if: env.HAS_CSHARP == 'true'
         shell: powershell
         run: |
           $zip = "${{ env.SOLUTION_NAME }}-service-win-x64.zip"
           Compress-Archive -Path "${{ env.SERVICE_PUBLISH_DIR }}\*" -DestinationPath $zip -Force
           Write-Host "Created: $zip"
 
-      # ── 3a · Ensure TwinCAT UmRT is running ─────────────────────────────────
+      # ── 6 · Ensure TwinCAT UmRT is running ──────────────────────────────────
       - name: Ensure TwinCAT UmRT is running
         shell: powershell
         run: |
@@ -101,7 +117,7 @@ jobs:
           }
           Write-Host "UmRT is running (PID $($proc.Id))."
 
-      # ── 3 · Execute TcCIBuilder (library build + docs + tests + SARIF) ──────
+      # ── 7 · Execute TcCIBuilder (library build + docs + tests + SARIF) ──────
       - name: Execute TcCIBuilder
         shell: powershell
         run: |
@@ -113,10 +129,10 @@ jobs:
             exit $LASTEXITCODE
           }
 
-      # ── 3b · Auto-detect SARIF file ─────────────────────────────────────────
+      # ── 8 · Auto-detect SARIF file ──────────────────────────────────────────
       # TcCIBuilder names the SARIF file after the library PLC project, which may
-      # differ from the solution name (see Issue 14 in CI/CD README). This step
-      # finds the generated file and exports SARIF_FILE for the upload step.
+      # differ from the solution name. This step finds the generated file and
+      # exports SARIF_FILE for the upload step.
       - name: Find SARIF file
         if: always()
         shell: powershell
@@ -130,7 +146,7 @@ jobs:
             Write-Host "No SARIF file found - upload step will be skipped."
           }
 
-      # ── 4 · Upload build log ─────────────────────────────────────────────────
+      # ── 9 · Upload build log ─────────────────────────────────────────────────
       - name: Upload build log
         if: always()
         uses: actions/upload-artifact@v4
@@ -138,7 +154,7 @@ jobs:
           name: build-logs
           path: build.log
 
-      # ── 5 · Upload TcUnit results ────────────────────────────────────────────
+      # ── 10 · Upload TcUnit results ───────────────────────────────────────────
       - name: Upload TcUnit results
         if: always()
         uses: actions/upload-artifact@v4
@@ -146,7 +162,7 @@ jobs:
           name: tcunit-results
           path: ${{ github.workspace }}\TcUnit_Results.xml
 
-      # ── 6 · Publish TcUnit test report to GitHub UI ──────────────────────────
+      # ── 11 · Publish TcUnit test report to GitHub UI ────────────────────────
       - name: Publish TcUnit test report
         if: always()
         uses: mikepenz/action-junit-report@v4
@@ -156,7 +172,7 @@ jobs:
           include_passed: true
           detailed_summary: true
 
-      # ── 7 · Upload SARIF artifact ────────────────────────────────────────────
+      # ── 12 · Upload SARIF artifact ───────────────────────────────────────────
       - name: Upload static analysis artifact
         if: always()
         uses: actions/upload-artifact@v4
@@ -164,7 +180,7 @@ jobs:
           name: static-analysis
           path: ${{ github.workspace }}\*.sarif.json
 
-      # ── 8 · Upload SARIF to GitHub Code Scanning ─────────────────────────────
+      # ── 13 · Upload SARIF to GitHub Code Scanning ───────────────────────────
       # Requires Code Scanning enabled in repo Settings > Code security.
       # Skipped automatically when no SARIF file was produced by TcCIBuilder.
       - name: Upload SARIF to Code Scanning
@@ -175,7 +191,7 @@ jobs:
           sarif_file: ${{ env.SARIF_FILE }}
           category: twincat-static-analysis
 
-      # ── 9 · Deploy TcDocGen documentation to gh-pages ───────────────────────
+      # ── 14 · Deploy TcDocGen documentation to gh-pages ──────────────────────
       - name: Deploy documentation to gh-pages
         if: success()
         shell: powershell
@@ -218,7 +234,7 @@ jobs:
           Set-Location "${{ github.workspace }}"
           Remove-Item $tmpDir -Recurse -Force
 
-      # ── 9b · Enable GitHub Pages and set homepage URL (idempotent) ──────────
+      # ── 15 · Enable GitHub Pages and set homepage URL (idempotent) ──────────
       # Requires pages: write permission.
       # On org repos GITHUB_TOKEN may still return 403 due to org policy - non-blocking.
       # One-time fallback via CLI:
@@ -237,7 +253,7 @@ jobs:
           gh api repos/$repo -X PATCH -f "homepage=$pagesUrl" --jq '.homepage'
           Write-Host "Pages and homepage configured: $pagesUrl"
 
-      # ── 10 · Release TwinCAT library files (.library + .compiled-library) ───
+      # ── 16 · Release TwinCAT library files (.library + .compiled-library) ───
       - name: Publish TwinCAT library releases
         if: success()
         shell: powershell
@@ -292,10 +308,9 @@ jobs:
             }
           }
 
-      # ── 11 · Release C# Windows service ─────────────────────────────────────
-      # Remove this step if the solution has no C# project.
+      # ── 17 · Release C# Windows service ─────────────────────────────────────
       - name: Publish C# service release
-        if: success()
+        if: success() && env.HAS_CSHARP == 'true'
         shell: powershell
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
