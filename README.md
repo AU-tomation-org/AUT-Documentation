@@ -5,6 +5,8 @@
 | Document | Description |
 |---|---|
 | [Naming Conventions](Naming-Conventions.md) | Naming rules for TwinCAT projects, variables, and files |
+| [Pragmas: Monitoring and Visibility](Pragmas-Monitoring-Visibility.md) | `monitoring`, `displaymode`, `hide`, `hide_all_locals` |
+| [Documentation Style Guide](Documentation-Style-Guide.md) | How to write and structure documents in this repo |
 | [TcDocGen](TcDocGen.md) | TcDocGen setup, output structure, and known tool limitations |
 | [TcDocGen Commenting Guide](TcDocGen-Commenting-Guide/README.md) | Complete guide to writing documentation comments in TwinCAT 3 ST: all markup syntax, rules by element type, and AU-tomation conventions |
 | [TcDocGen Viewer](tcdocgen-viewer/README.md) | Enhanced HTML viewer for Beckhoff TcDocGen output: interactive sidebar, breadcrumb navigation, and inject.js page enhancer |
