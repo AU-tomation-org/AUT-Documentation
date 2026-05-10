@@ -129,21 +129,27 @@ A single-page application with no build step and no dependencies.
 
 | Component | Description |
 |-----------|-------------|
-| Sidebar | Collapsible tree built from `manifest.json`. Supports text search with match highlighting. Width is user-resizable via drag. |
+| Sidebar | Collapsible tree built from `manifest.json`. Only the first two depth levels are expanded on load. Supports text search with match highlighting. Width is user-resizable via drag. |
 | iframe | Loads each `.HTM` page from disk; sandboxed with `allow-scripts allow-same-origin`. |
 | Breadcrumb | Tracks the current path through the tree; each segment is clickable. |
+| Theme toggle | Light / dark switch; preference persisted in `localStorage`. Dark mode applies to the sidebar, the iframe content, and canvas class diagrams. |
 | `postMessage` bus | The only communication channel between the iframe and the shell (required by the sandbox). |
+
+Symbol colours follow the **VS Code Light+ / Dark+** palette: Function Blocks and Programs
+use amber, Interfaces use blue, Functions use brown (light) / blue (dark), Methods use
+amber/brown, Properties use blue.  Sidebar icons use the [Codicon](https://microsoft.github.io/vscode-codicons/) font.
 
 Boot sequence:
 
 1. `fetch('./manifest.json')` → parse tree
-2. Build sidebar DOM from tree nodes
+2. Build sidebar DOM from tree nodes (depth ≥ 2 collapsed by default)
 3. Wait for user click → set `iframe.src` → on `load` → call `injectNav(node)`
 
 ### `inject.js` — the page enhancer
 
 Injected into every `.HTM` page **after** it loads in the iframe.  It never modifies
-files on disk.
+files on disk.  Loaded with a `?v=Date.now()` cache-buster so browser updates are
+always picked up without a hard refresh.
 
 What it adds:
 
@@ -152,6 +158,7 @@ What it adds:
 | Sticky nav bar | Shows breadcrumb (⌂ / parent / current) and an "↑ Up" button. Styled to match Beckhoff's colour scheme (`#EF0000`). |
 | Type badge | Detects `Function Block`, `Method`, `Interface`, etc. from the `<h1>` and shows a label. |
 | Clickable method names | In the "Methods" / "Members" table, names that have their own child page become clickable links (navigates via `postMessage`). |
+| Dark mode | Listens for `tc3nav:theme` messages from the shell and applies the `tc3nav-dark` class to the iframe document, overriding all Beckhoff hardcoded colours. Canvas class diagrams are redrawn in dark colours via `window.__tc3nav_redrawAll()`. |
 | Banner suppression | Hides Beckhoff's `.header` div ("TwinCAT Documentation Generation"). |
 
 bfcache / back-forward handling: when the browser restores a page from its cache,
