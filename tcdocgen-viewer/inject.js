@@ -120,7 +120,7 @@
     if (childNames.size === 0) return; // no children → nothing to linkify
 
     document.querySelectorAll('h2, h3').forEach(heading => {
-      if (!/^(methods|members)$/i.test(heading.textContent.trim())) return;
+      if (!/^(methods|members|properties)$/i.test(heading.textContent.trim())) return;
 
       // Find the next <table> sibling after this heading
       let el = heading.nextElementSibling;
@@ -233,12 +233,56 @@
         color: #ffffff;
       }
 
+      /* Widen Beckhoff tables from the default 50% to 90% */
+      table, .standardborder {
+        width: 90% !important;
+      }
+
       /* Hide the invasive Beckhoff "TwinCAT Documentation Generation" banner */
       .header {
         display: none !important;
       }
+
+      /* ── Dark theme ── */
+      html.tc3nav-dark body {
+        background: #1e1e1e !important;
+        color: #d4d4d4 !important;
+      }
+      /* Override all Beckhoff hardcoded colors (font tags, inline styles, CSS classes) */
+      html.tc3nav-dark body * {
+        color: #d4d4d4 !important;
+      }
+      /* Specific overrides — come after body* so win on equal specificity */
+      html.tc3nav-dark a { color: #4d9fec !important; }
+      html.tc3nav-dark td, html.tc3nav-dark th {
+        background: #252526 !important;
+        border-color: #3c3c3c !important;
+      }
+      html.tc3nav-dark th {
+        background: #555555 !important;
+        color: #ffffff !important;
+      }
+      /* Nav bar — higher specificity, always win */
+      html.tc3nav-dark .tc3nav-bar {
+        background: #252526 !important;
+        border-bottom-color: #3c3c3c !important;
+        color: #d4d4d4 !important;
+      }
+      html.tc3nav-dark .tc3nav-bc-part  { color: #999 !important; }
+      html.tc3nav-dark .tc3nav-active   { color: #fff !important; }
+      html.tc3nav-dark .tc3nav-sep      { color: #555 !important; }
+      html.tc3nav-dark .tc3nav-badge    { background: #2d2d2d !important; color: #888 !important; border-color: #444 !important; }
+      html.tc3nav-dark .tc3nav-up       { background: #2d2d2d !important; border-color: #444 !important; color: #d4d4d4 !important; }
     `;
     document.head.appendChild(style);
+  }
+
+  // ── Apply / remove dark theme class ──────────────────────
+  function applyTheme(dark) {
+    document.documentElement.classList.toggle('tc3nav-dark', dark);
+    // Tell script.js which mode we're in, then redraw canvas diagrams
+    window.__TC3_DARK = dark;
+    window.__tc3nav_redrawAll?.();
   }
 
   // ── Main ──────────────────────────────────────────────────
@@ -247,12 +291,21 @@
     document.querySelector('.tc3nav-bar')?.remove();
 
     injectStyles();
+    applyTheme(localStorage.getItem('tc3nav-theme') === 'dark');
 
     const bar = buildNavBar();
     document.body.insertBefore(bar, document.body.firstChild);
 
     linkifyMethodTable();
+
+    // Signal parent that styles are applied and the page is safe to reveal
+    window.parent.postMessage({ type: 'tc3nav:ready' }, '*');
   }
+
+  // Listen for theme changes from the parent frame
+  window.addEventListener('message', e => {
+    if (e.data?.type === 'tc3nav:theme') applyTheme(e.data.dark);
+  });
 
   // pageshow fires on normal load AND on bfcache restore (back/forward).
   // On bfcache restore (event.persisted === true) the DOM is intact but

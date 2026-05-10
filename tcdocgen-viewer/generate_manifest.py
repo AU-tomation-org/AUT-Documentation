@@ -42,6 +42,7 @@ found it falls back to the first non-skipped subfolder.
 """
 
 import os
+import re
 import json
 
 # Folders to skip entirely (Beckhoff stores image/CSS assets here)
@@ -49,6 +50,51 @@ SKIP_FOLDERS = {'files'}
 
 # File extensions treated as documentation pages
 DOC_EXTENSIONS = {'.htm', '.html'}
+
+# Ordered so longer prefixes are checked before shorter ones
+_TYPE_MAP = [
+    ('function block',       'fb'),
+    ('global variable list', 'gvl'),
+    ('interface',            'interface'),
+    ('method',               'method'),
+    ('function',             'function'),
+    ('program',              'program'),
+    ('property',             'property'),
+    ('action',               'action'),
+]
+
+_ACCESS_MAP = {
+    'PRIVATE':   'private',
+    'PROTECTED': 'protected',
+    'INTERNAL':  'internal',
+}
+
+def parse_htm_meta(htm_path):
+    """Returns (kind, visibility) by reading the HTM file once."""
+    kind = 'unknown'
+    visibility = 'public'
+    try:
+        with open(htm_path, 'r', encoding='utf-8', errors='replace') as f:
+            content = f.read(5000)
+
+        m = re.search(r'<h1[^>]*\bid="([^"]+)"', content, re.IGNORECASE)
+        if m:
+            raw = m.group(1).lower()
+            for prefix, k in _TYPE_MAP:
+                if raw.startswith(prefix + ' '):
+                    kind = k
+                    break
+
+        m2 = re.search(
+            r'Access Modifier[^<]*</th>\s*<td[^>]*>\s*<font[^>]*>([^<]*)</font>',
+            content, re.IGNORECASE | re.DOTALL
+        )
+        if m2:
+            mod = m2.group(1).strip().upper()
+            visibility = _ACCESS_MAP.get(mod, 'public')
+    except Exception:
+        pass
+    return kind, visibility
 
 
 def scan(folder_path, base_path):
@@ -83,7 +129,8 @@ def scan(folder_path, base_path):
             if ext in DOC_EXTENSIONS:
                 rel = os.path.relpath(entry.path, base_path).replace('\\', '/')
                 stem = os.path.splitext(entry.name)[0]
-                file_node = {"name": stem, "path": rel, "children": []}
+                k, vis = parse_htm_meta(entry.path)
+                file_node = {"name": stem, "path": rel, "kind": k, "visibility": vis, "children": []}
                 htm_files[stem.lower()] = file_node
                 node["children"].append(file_node)
 
@@ -184,13 +231,33 @@ def build_manifest(base_path):
                     root["children"].append(child)
             elif entry.is_file() and entry.name.lower().endswith('.htm'):
                 rel = os.path.relpath(entry.path, base_path).replace('\\', '/')
+                k, vis = parse_htm_meta(entry.path)
                 root["children"].append({
-                    "name":     os.path.splitext(entry.name)[0],
-                    "path":     rel,
-                    "children": []
+                    "name":       os.path.splitext(entry.name)[0],
+                    "path":       rel,
+                    "kind":       k,
+                    "visibility": vis,
+                    "children":   []
                 })
 
     return root
+
+
+def find_version(base_path):
+    """Walk the tree looking for Global_Version.HTM and extract sVersion."""
+    for root, dirs, files in os.walk(base_path):
+        dirs[:] = [d for d in dirs if d not in SKIP_FOLDERS]
+        for fname in files:
+            if fname.lower() == 'global_version.htm':
+                try:
+                    with open(os.path.join(root, fname), 'r', encoding='utf-8', errors='replace') as f:
+                        content = f.read()
+                    m = re.search(r"sVersion\s*:=\s*'([^']+)'", content)
+                    if m:
+                        return m.group(1)
+                except Exception:
+                    pass
+    return None
 
 
 if __name__ == '__main__':
@@ -199,6 +266,9 @@ if __name__ == '__main__':
 
     try:
         manifest = build_manifest(base)
+        version = find_version(base)
+        if version:
+            manifest['version'] = version
         out_path = os.path.join(base, 'manifest.json')
         with open(out_path, 'w', encoding='utf-8') as f:
             json.dump(manifest, f, ensure_ascii=False, indent=2)
