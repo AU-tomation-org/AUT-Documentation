@@ -289,8 +289,6 @@ if __name__ == '__main__':
 
         total = count_pages(manifest)
         print(f"OK  manifest.json generated — {total} pages indexed.")
-        print(f"    Start the server : python -m http.server 8080")
-        print(f"    Then open        : http://localhost:8080/index.html")
 
     except Exception as e:
         print(f"ERROR: {e}")
