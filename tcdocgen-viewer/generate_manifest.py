@@ -244,7 +244,7 @@ def build_manifest(base_path):
 
 
 def find_version(base_path):
-    """Walk the tree looking for Global_Version.HTM and extract sVersion."""
+    """Walk the tree looking for Global_Version.HTM and extract the version number."""
     for root, dirs, files in os.walk(base_path):
         dirs[:] = [d for d in dirs if d not in SKIP_FOLDERS]
         for fname in files:
@@ -252,6 +252,14 @@ def find_version(base_path):
                 try:
                     with open(os.path.join(root, fname), 'r', encoding='utf-8', errors='replace') as f:
                         content = f.read()
+                    # Prefer the numeric components — sVersion is a static string that is not
+                    # updated automatically when the version struct fields change.
+                    m = re.search(
+                        r'iMajor\s*:=\s*(\d+)[^;]*iMinor\s*:=\s*(\d+)[^;]*iBuild\s*:=\s*(\d+)[^;]*iRevision\s*:=\s*(\d+)',
+                        content, re.DOTALL)
+                    if m:
+                        return f'{m.group(1)}.{m.group(2)}.{m.group(3)}.{m.group(4)}'
+                    # Fallback to sVersion string
                     m = re.search(r"sVersion\s*:=\s*'([^']+)'", content)
                     if m:
                         return m.group(1)
