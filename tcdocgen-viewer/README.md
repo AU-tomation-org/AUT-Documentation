@@ -75,8 +75,8 @@ The `docs/index.html` at repository root is a one-line meta-refresh redirect:
 
 ## Setup (first time or after TcDocGen regenerates)
 
-1. Copy `index.html`, `inject.js`, and `generate_manifest.py` from `tcdocgen-viewer/`
-   into `docs/<ProjectName>/`.
+1. Copy `index.html`, `inject.js`, `generate_manifest.py`, and `logo.svg` from
+   `tcdocgen-viewer/` into `docs/<ProjectName>/`.
 
 2. Open a terminal inside `docs/<ProjectName>/` and run:
 
@@ -133,11 +133,16 @@ A single-page application with no build step and no dependencies.
 | iframe | Loads each `.HTM` page from disk; sandboxed with `allow-scripts allow-same-origin`. |
 | Breadcrumb | Tracks the current path through the tree; each segment is clickable. |
 | Theme toggle | Light / dark switch; preference persisted in `localStorage`. Dark mode applies to the sidebar, the iframe content, and canvas class diagrams. |
+| Responsive top bar | Below 640 px the top bar switches to a compact layout: version number and "Documentation" label are hidden, font sizes are reduced. The version is always visible in the sidebar root node instead. |
 | `postMessage` bus | The only communication channel between the iframe and the shell (required by the sandbox). |
 
 Symbol colours follow the **VS Code Light+ / Dark+** palette: Function Blocks and Programs
 use amber, Interfaces use blue, Functions use brown (light) / blue (dark), Methods use
 amber/brown, Properties use blue.  Sidebar icons use the [Codicon](https://microsoft.github.io/vscode-codicons/) font.
+
+Each POU node shows a type abbreviation after its name — `(FB)`, `(ITF)`, `(FUN)`, `(PRG)` —
+matching the Visual Studio 2022 TwinCAT Solution Explorer style.  The sidebar root node
+shows the library version number next to the project name.
 
 Boot sequence:
 
@@ -159,7 +164,8 @@ What it adds:
 | Type badge | Detects `Function Block`, `Method`, `Interface`, etc. from the `<h1>` and shows a label. |
 | Clickable method names | In the "Methods" / "Members" table, names that have their own child page become clickable links (navigates via `postMessage`). |
 | Dark mode | Listens for `tc3nav:theme` messages from the shell and applies the `tc3nav-dark` class to the iframe document, overriding all Beckhoff hardcoded colours. Canvas class diagrams are redrawn in dark colours via `window.__tc3nav_redrawAll()`. |
-| Banner suppression | Hides Beckhoff's `.header` div ("TwinCAT Documentation Generation"). |
+| Column widths | Beckhoff data tables: 5-column (Name\|Type\|Value\|Comment\|Inherited) → first 3 cols 20%, Comment fills remaining, Inherited min-content (90 px). 3-column (Name\|Type\|Comment) → first 2 cols 20%, Comment fills remaining. Applied via CSS attribute selectors on stable Beckhoff `th` IDs. |
+| Banner suppression | Hides Beckhoff's `.header` div and the unused `#ClassDiagramCanvas` placeholder (100 × 100 px), eliminating all residual whitespace at the top of each page. |
 
 bfcache / back-forward handling: when the browser restores a page from its cache,
 `inject.js` sends `tc3nav:reinject` to the parent so the shell can re-inject the nav
@@ -190,7 +196,9 @@ Key behaviour:
 | `tcdocgen-viewer/index.html` | this repo | Master copy of the viewer shell |
 | `tcdocgen-viewer/inject.js` | this repo | Master copy of the page enhancer |
 | `tcdocgen-viewer/generate_manifest.py` | this repo | Master copy of the manifest builder |
+| `tcdocgen-viewer/logo.svg` | this repo | AU-tomation logo — referenced by `index.html` as a relative path |
 | `docs/<ProjectName>/index.html` | each library repo | Working copy (deployed to gh-pages) |
 | `docs/<ProjectName>/inject.js` | each library repo | Working copy |
 | `docs/<ProjectName>/generate_manifest.py` | each library repo | Working copy |
+| `docs/<ProjectName>/logo.svg` | each library repo | Working copy — must sit alongside `index.html` |
 | `docs/<ProjectName>/manifest.json` | each library repo | Generated — do not edit manually |
