@@ -21,7 +21,7 @@
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     html, body { height: 100%; background: var(--bg); color: var(--text); font-family: var(--font); font-size: 9pt; overflow: hidden; }
 
-    #root { display: flex; flex-direction: column; height: 100vh; width: 100vw; overflow: hidden; }
+    #root { display: flex; flex-direction: column; height: 100vh; height: 100dvh; width: 100vw; overflow: hidden; }
     #app  { display: flex; flex: 1; min-height: 0; }
 
     /* ── Top bar ── */
@@ -41,6 +41,19 @@
     #top-project-version { font-size: 17pt;  color: var(--text-dim); }
     #top-bar-right { flex: 1; display: flex; justify-content: flex-end; }
     #top-bar-label { font-size: 25pt; color: var(--text-dim); letter-spacing: 0.04em; }
+
+    /* ── Top bar — compact (mobile / narrow window) ── */
+    @media (max-width: 640px) {
+      #top-bar { height: 40px; padding: 0 10px 0 8px; }
+      #top-logo { height: 26px; }
+      #top-brand-text { height: 26px; }
+      #top-brand-main { font-size: 11pt; }
+      #top-brand-sub  { font-size: 8pt; white-space: nowrap; }
+      #top-bar-center { gap: 6px; }
+      #top-project-name    { font-size: 14pt; }
+      #top-project-version { display: none; }
+      #top-bar-right  { display: none; }
+    }
 
     /* ── Sidebar ── */
     #sidebar {
@@ -105,6 +118,8 @@
     }
 
     .node-label { overflow: hidden; text-overflow: ellipsis; flex: 1; }
+    .node-kind-abbr    { opacity: 0.55; font-size: 0.85em; font-weight: normal; }
+    .node-root-version { opacity: 0.6;  font-size: 0.8em;  font-weight: normal; margin-left: 6px; }
 
     /* Root node */
     .is-root {
@@ -260,8 +275,8 @@
     [data-theme="dark"] .tf-actions    .node-label { color: #EE9D28; }
 
     /* Thema folders — override JS inline color */
-    [data-theme="dark"] .is-thema-folder .node-label { color: #c4855a !important; }
-    [data-theme="dark"] .is-thema-folder .node-icon  { color: #c4855a !important; }
+    [data-theme="dark"] .is-thema-folder .node-label { color: #999999 !important; }
+    [data-theme="dark"] .is-thema-folder .node-icon  { color: #999999 !important; }
 
     /* Kind items dark mode — override inline styles with !important */
     [data-theme="dark"] [data-kind="fb"]        .node-icon,
@@ -354,6 +369,13 @@ const KIND_ICON = {
   unknown:   'codicon-symbol-file',
 };
 
+const KIND_ABBR = {
+  fb:        'FB',
+  interface: 'ITF',
+  function:  'FUN',
+  program:   'PRG',
+};
+
 const KIND_COLOR = {
   fb:        '#D67E00',  // class   → VS Code orange
   interface: '#007ACC',  // interface → VS Code blue
@@ -398,7 +420,7 @@ const TYPE_FOLDER = {
   actions:    { icon: 'codicon-symbol-event',     color: '#D67E00' },
 };
 
-const THEMA_COLOR = '#8b5e3c';
+const THEMA_COLOR = '#3a3a3a';
 
 function makeIcon(iconStr, color) {
   const el = document.createElement('i');
@@ -451,6 +473,7 @@ function buildFullTree(manifestNode, depth, parent) {
   if (manifestNode.isRoot)       extras.isRoot      = true;
   if (manifestNode.kind)         extras.kind        = manifestNode.kind;
   if (manifestNode.visibility)   extras.visibility  = manifestNode.visibility;
+  if (manifestNode.version)      extras.version     = manifestNode.version;
   const node = makeNode(manifestNode.name, manifestNode.path || null, isFolder, depth, parent, extras);
   for (const child of (manifestNode.children || [])) {
     node.children.push(buildFullTree(child, depth + 1, node));
@@ -529,6 +552,19 @@ function renderNode(node, container) {
   lbl.title = node.name;
   if (isThemaFolder) lbl.style.color = THEMA_COLOR;
   if (isPou) lbl.style.color = getNodeColor(node);
+  const kindAbbr = KIND_ABBR[node.kind];
+  if (kindAbbr) {
+    const abbrSpan = document.createElement('span');
+    abbrSpan.className = 'node-kind-abbr';
+    abbrSpan.textContent = ' (' + kindAbbr + ')';
+    lbl.appendChild(abbrSpan);
+  }
+  if (node.isRoot && node.version) {
+    const verSpan = document.createElement('span');
+    verSpan.className = 'node-root-version';
+    verSpan.textContent = ' v' + node.version;
+    lbl.appendChild(verSpan);
+  }
   node._labelEl = lbl;
   el.appendChild(lbl);
 
@@ -555,15 +591,20 @@ function renderNode(node, container) {
     if (startCollapsed) {
       el.classList.add('collapsed');
       childDiv.classList.add('collapsed');
-    } else {
-      requestAnimationFrame(() => { childDiv.style.maxHeight = childDiv.scrollHeight + 'px'; });
     }
+    // Initially expanded nodes get no maxHeight constraint so children can grow freely.
 
     el.addEventListener('click', e => {
       e.stopPropagation();
       const collapsed = el.classList.toggle('collapsed');
+      if (collapsed) {
+        // Pin to actual height first so the CSS transition animates from real height → 0
+        childDiv.style.maxHeight = childDiv.scrollHeight + 'px';
+        childDiv.offsetHeight; // force reflow
+      } else {
+        childDiv.style.maxHeight = '9999px';
+      }
       childDiv.classList.toggle('collapsed', collapsed);
-      if (!collapsed) childDiv.style.maxHeight = '9999px';
       chevron.className = 'node-chevron codicon ' + (collapsed ? 'codicon-chevron-right' : 'codicon-chevron-down');
       if (node.path) navigateTo(node);
     });

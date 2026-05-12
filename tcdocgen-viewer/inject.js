@@ -237,9 +237,16 @@
       table, .standardborder {
         width: 90% !important;
       }
+      /* Column widths for Beckhoff data tables (IDs are stable across all HTM files) */
+      th[id^="Inherited_"] { width: 90px !important; white-space: nowrap !important; }
+      th[id^="Comment_"]   { width: auto !important; }
 
       /* Hide the invasive Beckhoff "TwinCAT Documentation Generation" banner */
       .header {
+        display: none !important;
+      }
+      /* Hide the unused Beckhoff placeholder canvas (always 100×100 px, never drawn into) */
+      #ClassDiagramCanvas {
         display: none !important;
       }
 
