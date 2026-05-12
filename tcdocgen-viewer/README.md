@@ -171,6 +171,17 @@ bfcache / back-forward handling: when the browser restores a page from its cache
 `inject.js` sends `tc3nav:reinject` to the parent so the shell can re-inject the nav
 info without reloading the page.
 
+#### Why `script.js` is patched instead of using CSS `filter: invert(1)`
+
+A CSS filter on the `<canvas>` element was tried but rejected: Beckhoff draws class
+diagrams using explicit fill colours (not just black/white), so a pixel-level invert
+produces visually incorrect results — colours become complementary rather than mapping
+to a coherent dark-mode palette.  The patched `script.js` instead intercepts Beckhoff's
+own drawing calls and substitutes dark-mode stroke/fill colours, which yields a correct
+result.  This means `script.js` must be kept in sync with the Beckhoff version used by
+TcDocGen; the CI step `3b` in `ci.yml` copies the patched file from the TcCIBuilder
+tool directory over the Beckhoff-generated one.
+
 ### `generate_manifest.py` — the tree builder
 
 Scans the Beckhoff output folders and produces a single `manifest.json` that describes
@@ -197,8 +208,10 @@ Key behaviour:
 | `tcdocgen-viewer/inject.js` | this repo | Master copy of the page enhancer |
 | `tcdocgen-viewer/generate_manifest.py` | this repo | Master copy of the manifest builder |
 | `tcdocgen-viewer/logo.svg` | this repo | AU-tomation logo — referenced by `index.html` as a relative path |
-| `docs/<ProjectName>/index.html` | each library repo | Working copy (deployed to gh-pages) |
-| `docs/<ProjectName>/inject.js` | each library repo | Working copy |
-| `docs/<ProjectName>/generate_manifest.py` | each library repo | Working copy |
-| `docs/<ProjectName>/logo.svg` | each library repo | Working copy — must sit alongside `index.html` |
-| `docs/<ProjectName>/manifest.json` | each library repo | Generated — do not edit manually |
+| `tcdocgen-viewer/script.js` | this repo | Patched Beckhoff script with dark-mode canvas support (see note above) |
+| `docs/<ProjectName>/index.html` | each library repo | Deployed by CI from TcCIBuilder tool directory |
+| `docs/<ProjectName>/inject.js` | each library repo | Deployed by CI from TcCIBuilder tool directory |
+| `docs/<ProjectName>/generate_manifest.py` | each library repo | Deployed by CI from TcCIBuilder tool directory |
+| `docs/<ProjectName>/logo.svg` | each library repo | Deployed by CI step 3b from TcCIBuilder tool directory |
+| `docs/<ProjectName>/script.js` | each library repo | Deployed by CI step 3b (overrides Beckhoff-generated version) |
+| `docs/<ProjectName>/manifest.json` | each library repo | Generated at CI time — do not edit manually |
