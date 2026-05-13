@@ -1,0 +1,142 @@
+# ──────────────────────────────────────────────────────────────────────────────
+# CI/CD template for pure .NET Framework projects (no TwinCAT).
+# Use this when the solution does NOT include a TwinCAT XAE project.
+# For TwinCAT projects, use CI-CD-GitHub-TwinCAT-Self-Hosted-Runner/ci.yml.
+#
+# What this workflow does:
+#   - Builds the solution with MSBuild (Release|x64)
+#   - Uploads the build log and output as artifacts
+#   - Creates (or updates) a GitHub Release with a zip of the build output
+#
+# SOLUTION_NAME is auto-detected from the .sln file in the repository root.
+# VERSION is auto-detected from AssemblyInfo.cs (AssemblyFileVersion) with
+# fallback to the first <Version> element found in a .csproj file.
+#
+# CUSTOMISE:
+#   - BUILD_PLATFORM: change to AnyCPU if the project does not target x64
+#   - OUTPUT_SUBPATH: relative path inside the project folder to the build
+#     output (default: bin\x64\Release); adjust if your project uses a
+#     non-standard layout
+# ──────────────────────────────────────────────────────────────────────────────
+
+name: C# Build & Release
+
+on:
+  push:
+    branches: [ master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: [self-hosted, windows]
+
+    env:
+      BUILD_CONFIG:   Release
+      BUILD_PLATFORM: x64
+      OUTPUT_SUBPATH: bin\x64\Release
+
+    permissions:
+      contents: write
+
+    steps:
+
+      # ── 1 · Checkout ────────────────────────────────────────────────────────
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          clean: false
+
+      # ── 2 · Auto-detect solution name ───────────────────────────────────────
+      - name: Find solution file
+        shell: powershell
+        run: |
+          $sln = Get-ChildItem -Path "${{ github.workspace }}" -Filter "*.sln" | Select-Object -First 1
+          if (-not $sln) { Write-Error "No .sln file found in repository root"; exit 1 }
+          "SOLUTION_NAME=$($sln.BaseName)" | Out-File -Append -FilePath $env:GITHUB_ENV -Encoding utf8
+          Write-Host "Found solution: $($sln.Name)"
+
+      # ── 3 · Build ────────────────────────────────────────────────────────────
+      - name: Build solution
+        shell: powershell
+        run: |
+          $msbuild = "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\MSBuild\Current\Bin\MSBuild.exe"
+          $solution = "${{ github.workspace }}\${{ env.SOLUTION_NAME }}.sln"
+          & $msbuild $solution `
+            /p:Configuration=${{ env.BUILD_CONFIG }} `
+            /p:Platform=${{ env.BUILD_PLATFORM }} `
+            /m | Tee-Object -FilePath "build.log"
+          if ($LASTEXITCODE -ne 0) {
+            Write-Error "Build failed with exit code $LASTEXITCODE"
+            exit $LASTEXITCODE
+          }
+
+      # ── 4 · Upload build log ─────────────────────────────────────────────────
+      - name: Upload build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-logs
+          path: build.log
+
+      # ── 5 · Upload build output ──────────────────────────────────────────────
+      - name: Upload build output
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.SOLUTION_NAME }}-bin
+          path: ${{ github.workspace }}\${{ env.SOLUTION_NAME }}\${{ env.OUTPUT_SUBPATH }}\**
+
+      # ── 6 · Auto-detect version ──────────────────────────────────────────────
+      # Tries AssemblyInfo.cs first (AssemblyFileVersion), then falls back to
+      # the first <Version> element found in a .csproj file.
+      - name: Detect version
+        if: success()
+        shell: powershell
+        run: |
+          $version = $null
+
+          $assemblyInfo = Get-ChildItem -Path "${{ github.workspace }}" -Recurse -Filter "AssemblyInfo.cs" | Select-Object -First 1
+          if ($assemblyInfo) {
+            $line = Select-String -Path $assemblyInfo.FullName -Pattern 'AssemblyFileVersion\("(.+)"\)' | Select-Object -First 1
+            if ($line) { $version = $line.Matches[0].Groups[1].Value }
+          }
+
+          if (-not $version) {
+            $csproj = Get-ChildItem -Path "${{ github.workspace }}" -Recurse -Filter "*.csproj" | Select-Object -First 1
+            if ($csproj) {
+              [xml]$xml = Get-Content $csproj.FullName
+              $version = $xml.SelectSingleNode("//*[local-name()='Version']")?.InnerText
+            }
+          }
+
+          if (-not $version) {
+            Write-Error "Could not detect version from AssemblyInfo.cs or .csproj"
+            exit 1
+          }
+
+          "RELEASE_VERSION=$version" | Out-File -Append -FilePath $env:GITHUB_ENV -Encoding utf8
+          Write-Host "Version: $version"
+
+      # ── 7 · Create GitHub Release ────────────────────────────────────────────
+      - name: Publish release
+        if: success()
+        shell: powershell
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $tag     = "${{ env.SOLUTION_NAME }}-v${{ env.RELEASE_VERSION }}"
+          $binPath = "${{ github.workspace }}\${{ env.SOLUTION_NAME }}\${{ env.OUTPUT_SUBPATH }}"
+          $zipPath = "${{ github.workspace }}\${{ env.SOLUTION_NAME }}-v${{ env.RELEASE_VERSION }}.zip"
+
+          Compress-Archive -Path "$binPath\*" -DestinationPath $zipPath -Force
+
+          $exists = & { $ErrorActionPreference = 'SilentlyContinue'
+                        gh release view $tag --json tagName 2>$null }
+          if (-not $exists) {
+            gh release create $tag `
+              --title "${{ env.SOLUTION_NAME }} v${{ env.RELEASE_VERSION }}" `
+              --notes "Automated release from ${{ github.sha }}."
+          }
+
+          gh release upload $tag $zipPath --clobber
+          Write-Host "Published: $tag"
