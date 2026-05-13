@@ -15,6 +15,7 @@
 | [TwinCAT UmRT - Autostart and License Check](TwinCAT-UmRT-Setup/README.md) | Scheduled tasks to auto-start UmRT at logon and notify when the trial license is near expiry |
 | [TcUnit Testing](TcUnit-Testing/README.md) | How to set up and write unit tests for TwinCAT 3 libraries using TcUnit: project structure, conventions, and test templates |
 | [New GitHub Repository](New-GitHub-Repository/README.md) | Interactive PowerShell script to create a new AU-tomation GitHub repo: git init, ci.yml, branch protection, topics, and homepage in one command |
+| [TwinCAT .gitignore](TwinCAT-Gitignore/README.md) | Canonical `.gitignore` for all AU-tomation TwinCAT repositories: single source of truth, covers all generated files, CI artifacts, and Claude Code settings |
 
 ### TcDocGen
 
@@ -61,3 +62,10 @@
 | File | Description |
 |---|---|
 | [README.md](TcUnit-Testing/README.md) | Setup guide, conventions, VAR_INST rationale, single-cycle and multi-cycle test templates |
+
+### TwinCAT .gitignore
+
+| File | Description |
+|---|---|
+| [README.md](TwinCAT-Gitignore/README.md) | What is ignored and how to update across all repos |
+| [.gitignore](TwinCAT-Gitignore/.gitignore) | Canonical ignore file — copy to every `AUT_...` repository root |
