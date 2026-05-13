@@ -1,0 +1,33 @@
+name: Check ci.yml template sync
+
+on:
+  push:
+    paths:
+      - 'New-GitHub-Repository/ci.yml'
+      - 'CI-CD-GitHub-TwinCAT-Self-Hosted-Runner/ci.yml'
+  pull_request:
+    paths:
+      - 'New-GitHub-Repository/ci.yml'
+      - 'CI-CD-GitHub-TwinCAT-Self-Hosted-Runner/ci.yml'
+
+jobs:
+  check-sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check ci.yml files are identical
+        run: |
+          if diff -q \
+            New-GitHub-Repository/ci.yml \
+            CI-CD-GitHub-TwinCAT-Self-Hosted-Runner/ci.yml > /dev/null; then
+            echo "ci.yml files are in sync."
+          else
+            echo "ERROR: ci.yml files have diverged."
+            echo ""
+            echo "New-GitHub-Repository/ci.yml is the source of truth."
+            echo "Copy it to CI-CD-GitHub-TwinCAT-Self-Hosted-Runner/ci.yml to fix."
+            echo ""
+            diff New-GitHub-Repository/ci.yml CI-CD-GitHub-TwinCAT-Self-Hosted-Runner/ci.yml
+            exit 1
+          fi

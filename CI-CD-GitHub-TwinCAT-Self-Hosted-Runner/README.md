@@ -489,11 +489,41 @@ After the one-time manual setup, step 9b in `ci.yml` uses `continue-on-error: tr
 
 ---
 
+## CI/CD workflow steps reference
+
+> **Source of truth:** `ci.yml` lives in [New-GitHub-Repository/ci.yml](../New-GitHub-Repository/ci.yml). The copy in this folder is kept identical by the `check-ci-template-sync.yml` workflow. **Always edit `New-GitHub-Repository/ci.yml` first**, then copy it here.
+
+`ci.yml` in each TwinCAT project repository runs the following steps. The C# steps (4, 5, 19) are automatically skipped when no `.csproj` is found — no manual editing needed.
+
+| Step | Name | `if` | Description |
+|---|---|---|---|
+| 1 | Checkout repository | always | `actions/checkout@v4` with `clean: false` to preserve `docs/` between runs. |
+| 2 | Find solution file | always | Auto-detects the `.sln` filename and exports `SOLUTION_NAME` to the job environment. |
+| 3 | Detect C# project | always | Scans for a `.csproj`; sets `HAS_CSHARP`, `CSPROJ_PATH`, `SERVICE_PUBLISH_DIR`. Steps 4, 5, 19 are skipped when `HAS_CSHARP` is false. |
+| 4 | Publish C# service | `HAS_CSHARP` | `dotnet publish` for the detected C# project. |
+| 5 | Zip C# service | `HAS_CSHARP` | Compresses the publish output to a `.zip` for the release artifact. |
+| 6 | Ensure TwinCAT UmRT is running | always | Checks for `TcSystemServiceUm.exe`; starts UmRT via `Start.bat` if absent. Waits up to 30 s. Required for test activation. |
+| 7 | Restore docs baseline from gh-pages | always | If the anchor HTM file is missing from `docs/` (clean workspace, first run), clones the `gh-pages` branch and copies it to `docs/` so TcCIBuilder has a complete baseline for its incremental update. Skipped silently if `gh-pages` does not exist yet. |
+| 8 | Execute TcCIBuilder | always | Runs `TcCIBuilder.exe <solution> <config> <platform>`, tees output to `build.log`. Fails the job on non-zero exit. |
+| 9 | Add logo to docs | always | Copies `logo.svg` from `_tools\TcCIBuilder\` into `docs/<ProjectName>/`. Not copied by `TcCIBuilder.exe` itself. |
+| 10 | Find SARIF file | always | Scans the workspace root for `*.sarif.json` and exports `SARIF_FILE`. The SARIF filename follows the PLC project name, not the solution name (see Issue 14). |
+| 11 | Upload build log | always | Uploads `build.log` as the `build-logs` artifact. |
+| 12 | Upload TcUnit results | always | Uploads `TcUnit_Results.xml` as the `tcunit-results` artifact. |
+| 13 | Publish TcUnit test report | always | Renders JUnit XML as a GitHub check via `mikepenz/action-junit-report@v4`. |
+| 14 | Upload SARIF artifact | always | Uploads `*.sarif.json` as the `static-analysis` artifact. |
+| 15 | Upload SARIF to Code Scanning | always | Uploads SARIF to GitHub Code Scanning. Skipped if `SARIF_FILE` is empty. Non-blocking (`continue-on-error: true`). Requires Code Scanning enabled in repo settings. |
+| 16 | Deploy documentation to gh-pages | success | Clones (or creates) the `gh-pages` branch, copies `docs/` into it, and force-pushes if there are changes. |
+| 17 | Enable GitHub Pages and set homepage URL | success | Enables Pages on the `gh-pages` branch and sets the repo homepage URL. Idempotent, non-blocking. See Issue 13 for org-level 403 workaround. |
+| 18 | Publish TwinCAT library releases | success | Finds `.library` and `.compiled-library` files, reads `<ProjectVersion>` from `.plcproj`, and creates or updates a GitHub Release. |
+| 19 | Publish C# service release | `success` + `HAS_CSHARP` | Creates a GitHub Release with the service `.zip`. Skipped automatically when no C# project is detected. |
+
+---
+
 ## File Reference
 
 | File | Description |
 |---|---|
 | `README.md` | This document |
-| `ci.yml` | Workflow template — `SOLUTION_NAME` and SARIF file are auto-detected; customise only the C# env vars if applicable |
+| `ci.yml` | Mirror of `New-GitHub-Repository/ci.yml` — do not edit directly; see source of truth note above |
 | `scripts/setup-runner.ps1` | Automates Steps 5-6 of initial setup |
 | `scripts/re-register-runner.ps1` | Re-registers the runner after credential expiry |

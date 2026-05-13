@@ -3,7 +3,7 @@
 #   - TcUnit test execution on UmRT target
 #   - TcDocGen documentation deployed to gh-pages
 #   - TwinCAT library release (.library + .compiled-library)
-#   - Optional C# Windows service release (.zip)
+#   - Optional C# Windows service release (.zip) — auto-detected
 #   - SARIF static analysis upload to GitHub Code Scanning
 #
 # SOLUTION_NAME is auto-detected from the .sln file in the repository root.
@@ -54,7 +54,7 @@ jobs:
 
       # ── 3 · Detect C# project ───────────────────────────────────────────────
       # Searches for a .csproj file and sets HAS_CSHARP, CSPROJ_PATH, and
-      # SERVICE_PUBLISH_DIR in the job environment. Steps 4, 5, and 17 run only
+      # SERVICE_PUBLISH_DIR in the job environment. Steps 4, 5, and 19 run only
       # when HAS_CSHARP is 'true'.
       - name: Detect C# project
         shell: powershell
@@ -69,7 +69,7 @@ jobs:
             Write-Host "C# project detected: $relPath"
           } else {
             "HAS_CSHARP=false" | Out-File -Append -FilePath $env:GITHUB_ENV -Encoding utf8
-            Write-Host "No C# project found - steps 4, 5, and 17 will be skipped."
+            Write-Host "No C# project found - steps 4, 5, and 19 will be skipped."
           }
 
       # ── 4 · Build & publish C# Windows service ──────────────────────────────
@@ -117,7 +117,44 @@ jobs:
           }
           Write-Host "UmRT is running (PID $($proc.Id))."
 
-      # ── 7 · Execute TcCIBuilder (library build + docs + tests + SARIF) ──────
+      # ── 7 · Restore docs baseline from gh-pages if incomplete ───────────────
+      # TcCIBuilder does an ADDITIVE copy from TcDocGen output to workspace\docs\.
+      # TcDocGen runs incrementally (only regenerates changed POUs/GVLs), so if
+      # docs\ is ever lost or incomplete the anchor HTM file never comes back on
+      # its own. This step clones the last known-good docs from gh-pages into
+      # workspace\docs\ whenever the anchor file is absent, giving TcCIBuilder a
+      # complete baseline to update additively.
+      - name: Restore docs baseline from gh-pages if incomplete
+        shell: powershell
+        run: |
+          $anchorPath = "${{ github.workspace }}\docs\${{ env.SOLUTION_NAME }}\${{ env.SOLUTION_NAME }}\PLC\${{ env.SOLUTION_NAME }}.HTM"
+          if (Test-Path $anchorPath) {
+            Write-Host "Docs baseline is complete - no restore needed."
+            exit 0
+          }
+
+          Write-Host "Anchor file missing - restoring docs baseline from gh-pages..."
+          $repoUrl  = "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git"
+          $tmpClone = "C:\actions-runner\_work\_gh_pages_restore"
+
+          $branchExists = git ls-remote --heads origin gh-pages 2>$null
+          if (-not $branchExists) {
+            Write-Host "gh-pages branch does not exist yet - nothing to restore."
+            exit 0
+          }
+
+          if (Test-Path $tmpClone) { Remove-Item $tmpClone -Recurse -Force }
+          git clone --branch gh-pages --single-branch --depth 1 $repoUrl $tmpClone
+
+          $docsRoot = "${{ github.workspace }}\docs"
+          New-Item $docsRoot -ItemType Directory -Force | Out-Null
+          Copy-Item -Path "$tmpClone\*" -Destination $docsRoot -Recurse -Force
+          Remove-Item $tmpClone -Recurse -Force
+
+          $count = (Get-ChildItem $docsRoot -Recurse -Filter "*.HTM" -ErrorAction SilentlyContinue).Count
+          Write-Host "Restored docs baseline from gh-pages ($count HTM files)."
+
+      # ── 8 · Execute TcCIBuilder (library build + docs + tests + SARIF) ──────
       - name: Execute TcCIBuilder
         shell: powershell
         run: |
@@ -129,7 +166,24 @@ jobs:
             exit $LASTEXITCODE
           }
 
-      # ── 8 · Auto-detect SARIF file ──────────────────────────────────────────
+      # ── 9 · Add logo to docs ─────────────────────────────────────────────────
+      # TcCIBuilder.exe copies index.html / inject.js / script.js /
+      # generate_manifest.py from its tool directory, but does not copy logo.svg.
+      # This step ensures logo.svg is always present in the deployed viewer.
+      - name: Add logo to docs
+        shell: powershell
+        run: |
+          $toolDir  = "C:\actions-runner\_tools\TcCIBuilder"
+          $docsRoot = "${{ github.workspace }}\docs"
+          $projDir  = Get-ChildItem $docsRoot -Directory | Select-Object -First 1
+          if ($projDir) {
+            Copy-Item "$toolDir\logo.svg" "$($projDir.FullName)\logo.svg" -Force
+            Write-Host "Copied logo.svg to $($projDir.Name)"
+          } else {
+            Write-Warning "No project folder found under docs/ - skipping"
+          }
+
+      # ── 10 · Auto-detect SARIF file ─────────────────────────────────────────
       # TcCIBuilder names the SARIF file after the library PLC project, which may
       # differ from the solution name. This step finds the generated file and
       # exports SARIF_FILE for the upload step.
@@ -146,7 +200,7 @@ jobs:
             Write-Host "No SARIF file found - upload step will be skipped."
           }
 
-      # ── 9 · Upload build log ─────────────────────────────────────────────────
+      # ── 11 · Upload build log ────────────────────────────────────────────────
       - name: Upload build log
         if: always()
         uses: actions/upload-artifact@v4
@@ -154,7 +208,7 @@ jobs:
           name: build-logs
           path: build.log
 
-      # ── 10 · Upload TcUnit results ───────────────────────────────────────────
+      # ── 12 · Upload TcUnit results ───────────────────────────────────────────
       - name: Upload TcUnit results
         if: always()
         uses: actions/upload-artifact@v4
@@ -162,7 +216,7 @@ jobs:
           name: tcunit-results
           path: ${{ github.workspace }}\TcUnit_Results.xml
 
-      # ── 11 · Publish TcUnit test report to GitHub UI ────────────────────────
+      # ── 13 · Publish TcUnit test report to GitHub UI ────────────────────────
       - name: Publish TcUnit test report
         if: always()
         uses: mikepenz/action-junit-report@v4
@@ -172,7 +226,7 @@ jobs:
           include_passed: true
           detailed_summary: true
 
-      # ── 12 · Upload SARIF artifact ───────────────────────────────────────────
+      # ── 14 · Upload SARIF artifact ───────────────────────────────────────────
       - name: Upload static analysis artifact
         if: always()
         uses: actions/upload-artifact@v4
@@ -180,7 +234,7 @@ jobs:
           name: static-analysis
           path: ${{ github.workspace }}\*.sarif.json
 
-      # ── 13 · Upload SARIF to GitHub Code Scanning ───────────────────────────
+      # ── 15 · Upload SARIF to GitHub Code Scanning ───────────────────────────
       # Requires Code Scanning enabled in repo Settings > Code security.
       # Skipped automatically when no SARIF file was produced by TcCIBuilder.
       - name: Upload SARIF to Code Scanning
@@ -191,7 +245,7 @@ jobs:
           sarif_file: ${{ env.SARIF_FILE }}
           category: twincat-static-analysis
 
-      # ── 14 · Deploy TcDocGen documentation to gh-pages ──────────────────────
+      # ── 16 · Deploy TcDocGen documentation to gh-pages ──────────────────────
       - name: Deploy documentation to gh-pages
         if: success()
         shell: powershell
@@ -225,7 +279,7 @@ jobs:
           $status = git status --porcelain
           if ($status) {
             git commit -m "docs: update from $sha"
-            git push origin gh-pages
+            git push --force $repoUrl gh-pages
             Write-Host "Documentation deployed."
           } else {
             Write-Host "No documentation changes."
@@ -234,7 +288,7 @@ jobs:
           Set-Location "${{ github.workspace }}"
           Remove-Item $tmpDir -Recurse -Force
 
-      # ── 15 · Enable GitHub Pages and set homepage URL (idempotent) ──────────
+      # ── 17 · Enable GitHub Pages and set homepage URL (idempotent) ──────────
       # Requires pages: write permission.
       # On org repos GITHUB_TOKEN may still return 403 due to org policy - non-blocking.
       # One-time fallback via CLI:
@@ -253,7 +307,7 @@ jobs:
           gh api repos/$repo -X PATCH -f "homepage=$pagesUrl" --jq '.homepage'
           Write-Host "Pages and homepage configured: $pagesUrl"
 
-      # ── 16 · Release TwinCAT library files (.library + .compiled-library) ───
+      # ── 18 · Release TwinCAT library files (.library + .compiled-library) ───
       - name: Publish TwinCAT library releases
         if: success()
         shell: powershell
@@ -308,7 +362,7 @@ jobs:
             }
           }
 
-      # ── 17 · Release C# Windows service ─────────────────────────────────────
+      # ── 19 · Release C# Windows service ─────────────────────────────────────
       - name: Publish C# service release
         if: success() && env.HAS_CSHARP == 'true'
         shell: powershell

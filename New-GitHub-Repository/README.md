@@ -9,9 +9,9 @@ Interactive PowerShell script that creates a new AU-tomation GitHub repository f
 | File | Description |
 |---|---|
 | `New-AuRepo.ps1` | The interactive script |
-| `ci.yml` | Generic CI/CD workflow template (mirrors [CI-CD-GitHub-TwinCAT-Self-Hosted-Runner/ci.yml](../CI-CD-GitHub-TwinCAT-Self-Hosted-Runner/ci.yml)) |
+| `ci.yml` | **Canonical CI/CD workflow template** — source of truth; mirrored to [CI-CD-GitHub-TwinCAT-Self-Hosted-Runner/ci.yml](../CI-CD-GitHub-TwinCAT-Self-Hosted-Runner/ci.yml) |
 
-> When the CI template is updated, copy the new version to this folder as well.
+> **`New-GitHub-Repository/ci.yml` is the single source of truth.** When updating the template, edit this file and copy it to `CI-CD-GitHub-TwinCAT-Self-Hosted-Runner/ci.yml`. A GitHub Actions workflow (`check-ci-template-sync.yml`) enforces that the two files stay identical and fails on any divergence.
 
 ---
 
@@ -107,4 +107,4 @@ The bundled `ci.yml`:
 
 - **`SOLUTION_NAME`** is auto-detected from the `.sln` file in the repository root — no manual configuration needed
 - **SARIF file** is auto-detected after `TcCIBuilder` runs — resolves the library/solution name mismatch (see Issue 14 in [CI/CD README](../CI-CD-GitHub-TwinCAT-Self-Hosted-Runner/README.md))
-- **C# project steps** (steps 2, 3, 11) and the `CSPROJ_PATH` / `SERVICE_PUBLISH_DIR` env vars should be removed from `ci.yml` if the solution does not include a C# project
+- **C# project** is auto-detected (step 3 scans for `.csproj`); steps 4, 5, and 19 run automatically only when a C# project is found — no manual configuration needed
